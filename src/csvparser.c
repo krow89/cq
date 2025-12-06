@@ -85,7 +85,7 @@ CsvLine* parseLine(CsvEntry* line, size_t line_number) {
         entry = createCsvFloating(atof(field));
         break;
       case STRING:
-        entry = createCsvString(field, field_length);
+        entry = createCsvString(field, field_length+1);
         break;
     }
 
@@ -108,14 +108,16 @@ CsvFile* parseFile(char* file_buffer) {
 
   while(*cursor != '\0') {
     size_t line_length = 0;
-    while (*cursor != '\n') {
+    while (*cursor != '\n' && *cursor != '\0') {
       line_length++;
       cursor++;
     }
 
-    CsvEntry* line = createCsvString("", line_length+1);
-    memcpy(line->string.ptr, cursor-line_length, line_length+1);
-    line->string.ptr[line_length] = '\0';
+    char* line_string = malloc(line_length+1);
+    memcpy(line_string, cursor - line_length, line_length);
+    line_string[line_length] = '\0';
+    CsvEntry* line = createCsvString(line_string, line_length);
+    free(line_string);
 
     char* line_ptr = cursor-line_length; 
     size_t current_indentation_level = 0;
@@ -133,7 +135,7 @@ CsvFile* parseFile(char* file_buffer) {
     CsvLine* csv_line = parseLine(line, line_number);
     pushLine(csv_file, csv_line);
 
-    free(line);
+    freeCsvEntry(line);
     indentation_level = current_indentation_level;
     cursor++;
     line_number++;

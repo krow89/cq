@@ -33,6 +33,6 @@ clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR) $(EXEC)
 	
 test:
-	$(EXEC) ./test_data.csv
+	$(EXEC) ./test_data.csv -p -e "SELECT id, name AS first_name WHERE age > 25 AND gender > 25 ORDER BY age DESC"
 
 .PHONY: all clean up env down build logs test repl

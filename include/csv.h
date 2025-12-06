@@ -46,6 +46,8 @@ CsvLine* getHeaderLine(CsvFile* file);
 void pushEntry(CsvLine *line, CsvEntry* entry);
 void pushLine(CsvFile *file, CsvLine* line);
 void freeCsvEntry(CsvEntry* entry);
+void freeCsvLine(CsvLine* line);
+void freeCsvFile(CsvFile* file);
 void retain(CsvEntry* object);
 void release(CsvEntry* object);
 

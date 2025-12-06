@@ -13,7 +13,7 @@ void printCsvLine(CsvLine* csv_line, char delimiter, size_t col_size) {
         printf("%-*f", (int) col_size, current_entry->floating);
         break;
       case STRING:
-        printf("%-*.*s", (int) col_size, (int) col_size, current_entry->string.ptr);
+        printf("%-*.*s", (int) col_size, (int) (col_size < current_entry->string.length ? col_size : current_entry->string.length), current_entry->string.ptr);
     }
 
     if (j < csv_line->count - 1) {

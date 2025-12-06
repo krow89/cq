@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
     printCsvFile(csv_file);
   }
 
+  freeCsvFile(csv_file);
   free(file_buffer);
   return 0;
 }

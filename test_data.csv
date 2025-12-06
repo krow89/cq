@@ -1,4 +1,6 @@
-id,name,role
-1,Alice,admin
-2,Bob,user
-3,Carol,admin
+id,name,role,age,gender
+1,Alice,admin,20,f
+2,Bob,user,25,m
+3,Carol,admin,30,f
+4,David,user,22,m
+5,Eve,guest,28,f

@@ -54,7 +54,7 @@ CsvEntry* createCsvFloating(float floating) {
 
 void pushEntry(CsvLine *line, CsvEntry* entry) {
   line->count++;
-  line->entries = realloc(line->entries, sizeof(*entry)*(line->count));
+  line->entries = realloc(line->entries, sizeof(CsvEntry*)*(line->count));
   if (line->entries == NULL) {
     perror("Unable to realloc entries");
     exit(1);
@@ -64,7 +64,7 @@ void pushEntry(CsvLine *line, CsvEntry* entry) {
 
 void pushLine(CsvFile *file, CsvLine* line) {
   file->count++;
-  file->lines = realloc(file->lines, sizeof(*line)*(file->count));
+  file->lines = realloc(file->lines, sizeof(CsvLine*)*(file->count));
   if (file->lines == NULL) {
     perror("Unable to realloc lines");
     exit(1);
@@ -117,4 +117,28 @@ void release(CsvEntry* object) {
   if (object->refcount == 0) {
     freeCsvEntry(object);
   }
+}
+
+void freeCsvLine(CsvLine* line) {
+  if (line == NULL) return;
+  
+  for (size_t i = 0; i < line->count; i++) {
+    if (line->entries[i] != NULL) {
+      freeCsvEntry(line->entries[i]);
+    }
+  }
+  free(line->entries);
+  free(line);
+}
+
+void freeCsvFile(CsvFile* file) {
+  if (file == NULL) return;
+  
+  for (size_t i = 0; i < file->count; i++) {
+    if (file->lines[i] != NULL) {
+      freeCsvLine(file->lines[i]);
+    }
+  }
+  free(file->lines);
+  free(file);
 }
