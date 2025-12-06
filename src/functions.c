@@ -5,9 +5,9 @@
 #include <string.h>
 
 void initQueryFunctionRegistry(QueryFunctionRegistry* registry) {
-    registerQueryFunction(registry, createQueryFunction("EQ", 2, qf_eq));
-    registerQueryFunction(registry, createQueryFunction("GT", 2, qf_gt));
-    registerQueryFunction(registry, createQueryFunction("AND", 2, qf_and));
+    registerQueryFunction(registry, createQueryFunction("EQ", qf_eq));
+    registerQueryFunction(registry, createQueryFunction("GT", qf_gt));
+    registerQueryFunction(registry, createQueryFunction("AND", qf_and));
 }
 
 void qf_eq(QueryObject* context) {

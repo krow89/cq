@@ -58,7 +58,7 @@ QueryObject* parseQuery(char* query_string);
 char* unquoteString(char* string, size_t length);
 void executeQuery(QueryObject* query, CsvFile* csv_file, size_t data_line_index, QueryObject* context);
 QueryFunctionRegistry* createFunctionRegistry(void);
-QueryFunction* createQueryFunction(char* name, size_t arg_count, void (*function_ptr)(QueryObject* context));
+QueryFunction* createQueryFunction(char* name, void (*function_ptr)(QueryObject* context));
 void freeQueryFunction(QueryFunction* function);
 void freeFunctionRegistry(QueryFunctionRegistry* registry);
 void registerQueryFunction(QueryFunctionRegistry* registry, QueryFunction* function);

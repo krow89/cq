@@ -233,7 +233,6 @@ QueryObject* parseQuery(char* query_string) {
                     break;
                 case QUERY_STRING:
                     unquoted_token = unquoteString(token, token_length);
-                    printf("Unquoted token: [%s]\n", unquoted_token);
                     item = createQueryString(unquoted_token, strlen(unquoted_token));
                     free(unquoted_token);
                     break;
@@ -271,7 +270,7 @@ QueryFunctionRegistry* createFunctionRegistry(void) {
     return registry;
 }
 
-QueryFunction* createQueryFunction(char* name, size_t arg_count, void (*function_ptr)(QueryObject* context)) {
+QueryFunction* createQueryFunction(char* name, void (*function_ptr)(QueryObject* context)) {
     QueryFunction* function = malloc(sizeof(QueryFunction));
     if (function == NULL) {
         perror("Unable to create QueryFunction");
@@ -396,5 +395,9 @@ void executeQuery(QueryObject* query, CsvFile* csv_file, size_t data_line_index,
             fprintf(stderr, "Unsupported QueryObject type in query execution\n");
             exit(1);
         }
+
+        /*printf("==========CONTEXT==========\n");
+        printQueryObject(context);
+        printf("===========================\n");*/
     }
 }

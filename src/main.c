@@ -14,6 +14,8 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
+  unsigned char verbose = checkArgFlags(argc, argv, 'v');
+
   FILE *fp = fopen(argv[1], "r");
 
   if (fp == NULL) {
@@ -38,36 +40,61 @@ int main(int argc, char **argv) {
   fclose(fp);
 
   CsvFile* csv_file = parseFile(file_buffer);
+  CsvFile* results = createCsvFile();
+  pushLine(results, getHeaderLine(csv_file));
   
   if (checkArgFlags(argc, argv, 'q')) {
     char* expression = getOptionValue(argc, argv, 'q');
+
     if (expression == NULL) {
       fprintf(stderr, "No expression provided for evaluation\n");
       exit(1);
     }
     
-    printf("---------------\nEvaluating expression: %s\n", expression);
+    if (verbose) printf("---\nEvaluating expression: %s\n", expression);
 
     QueryObject* query = parseQuery(expression);
 
-    printQueryObject(query);
+    if (verbose) printQueryObject(query);
 
-    QueryObject* context = createQueryList();
 
-    printf("---------------\nExecuting query...\n");
-    executeQuery(query, csv_file, 2, context);
+    if (verbose) printf("---\nExecuting query...\n");
+
+    for (size_t i = 0; i < csv_file->count - 1; i++) {
+      QueryObject* context = createQueryList();
+
+      if (verbose) printf("Evaluating data line %zu:\n", i);
+      executeQuery(query, csv_file, i, context);
     
-    printf("---------------\nQuery execution context:\n");
-    printQueryObject(context);
+      if (verbose) {
+        printf("---\nQuery execution context:\n");
+        printQueryObject(context);
+      }
 
-    releaseQueryObject(context);
+      if (popQueryItem(context)->number) {
+        if (verbose) printf("Row %zu matches query condition.\n", i+1);
+        pushLine(results, getDataLine(csv_file, i));
+      }
+
+      releaseQueryObject(context);
+    }
+
+    fprintf(stderr, "%zu rows matched the query.\n", results->count-1);
+
     releaseQueryObject(query);
+
+    if (checkArgFlags(argc, argv, 'p')) {
+      if (verbose) printf("---\nPrinting CSV result contents:\n");
+      printCsvFile(results);
+    }
+  }
+  else {
+    if (checkArgFlags(argc, argv, 'p')) {
+      if (verbose) printf("---\nPrinting CSV file contents:\n");
+      printCsvFile(csv_file);
+    }
   }
   
-  if (checkArgFlags(argc, argv, 'p')) {
-    printf("---------------\nPrinting CSV file contents:\n");
-    printCsvFile(csv_file);
-  }
 
   freeCsvFile(csv_file);
   free(file_buffer);

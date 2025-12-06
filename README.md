@@ -7,6 +7,7 @@ Options:
         -h      Show this help message
         -p      Enable printing of the CSV file
         -q      Expression to evaluate
+        -v      Debug
 ```
 
 ### Compile
