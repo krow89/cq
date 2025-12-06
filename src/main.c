@@ -6,6 +6,7 @@
 #include "csvparser.h"
 #include "utils.h"
 #include "argparser.h"
+#include "queryparser.h"
 
 int main(int argc, char **argv) {
   if (argc < 2 || checkArgFlags(argc, argv, 'h')) {
@@ -38,13 +39,18 @@ int main(int argc, char **argv) {
 
   CsvFile* csv_file = parseFile(file_buffer);
   
-  if (checkArgFlags(argc, argv, 'e')) {
-    char* expression = getOptionValue(argc, argv, 'e');
+  if (checkArgFlags(argc, argv, 'q')) {
+    char* expression = getOptionValue(argc, argv, 'q');
     if (expression == NULL) {
       fprintf(stderr, "No expression provided for evaluation\n");
       exit(1);
     }
+    
     printf("Evaluating expression: %s\n", expression);
+
+    QueryObject* query = parseQuery(expression);
+
+    printQueryObject(query);
   }
   
   if (checkArgFlags(argc, argv, 'p')) {

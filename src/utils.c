@@ -1,18 +1,20 @@
 #include <stdio.h>
 #include "utils.h"
 #include "csv.h"
+#include "queryparser.h"
+
 void printCsvLine(CsvLine* csv_line, char delimiter, size_t col_size) {
   for (size_t j = 0; j < csv_line->count; j++) {
     CsvEntry* current_entry = csv_line->entries[j];
 
     switch (current_entry->type) {
-      case INTEGER:
-        printf("%-*d", (int) col_size, current_entry->integer);
+      case CSV_INTEGER:
+        printf("%-*d", (int) col_size, (int) current_entry->number);
         break;
-      case FLOATING:
-        printf("%-*f", (int) col_size, current_entry->floating);
+      case CSV_FLOATING:
+        printf("%-*f", (int) col_size, (float) current_entry->number);
         break;
-      case STRING:
+      case CSV_STRING:
         printf("%-*.*s", (int) col_size, (int) (col_size < current_entry->string.length ? col_size : current_entry->string.length), current_entry->string.ptr);
     }
 
@@ -61,5 +63,35 @@ void printCsvFile(CsvFile* csv_file) {
     CsvLine* current_line = getDataLine(csv_file, i);
 
     printCsvDataLine(current_line);
+  }
+}
+
+void printQueryObject(QueryObject* object) {
+  if (object == NULL) {
+    printf("QueryObject is NULL\n");
+    return;
+  }
+
+  switch (object->type) {
+    case QUERY_STRING:
+      printf("String: %.*s\n", (int)object->string.length, object->string.ptr);
+      break;
+    case QUERY_INTEGER:
+      printf("Integer: %d\n", (int) object->number);
+      break;
+    case QUERY_FLOATING:
+      printf("Floating: %f\n", (float) object->number);
+      break;
+    case QUERY_SYMBOL:
+      printf("Symbol: %.*s\n", (int)object->string.length, object->string.ptr);
+      break;
+    case QUERY_LIST:
+      printf("List with %zu items:\n", object->list.count);
+      for (size_t i = 0; i < object->list.count; i++) {
+        printQueryObject(object->list.items[i]);
+      }
+      break;
+    default:
+      printf("Unknown QueryObject type\n");
   }
 }

@@ -29,26 +29,27 @@ CsvEntry* createCsvEntry(enum CsvDataEntry type) {
 }
 
 CsvEntry* createCsvString(char *string, size_t length) {
-  CsvEntry* entry = createCsvEntry(STRING);
+  CsvEntry* entry = createCsvEntry(CSV_STRING);
   entry->string.length = length;
-  entry->string.ptr = malloc(sizeof(*string)*length);
+  entry->string.ptr = malloc(sizeof(*string)*(length+1));
   if (entry->string.ptr == NULL) {
     perror("Unable to allocate string for the entry");
     exit(1);
   }
   memcpy(entry->string.ptr, string, sizeof(*string)*length);
+  entry->string.ptr[length] = '\0';
   return entry;
 }
 
 CsvEntry* createCsvInteger(int integer) {
-  CsvEntry* entry = createCsvEntry(INTEGER);
-  entry->integer = integer;
+  CsvEntry* entry = createCsvEntry(CSV_INTEGER);
+  entry->number = integer;
   return entry;
 }
 
 CsvEntry* createCsvFloating(float floating) {
-  CsvEntry* entry = createCsvEntry(FLOATING);
-  entry->floating = floating;
+  CsvEntry* entry = createCsvEntry(CSV_FLOATING);
+  entry->number = floating;
   return entry;
 }
 
@@ -96,25 +97,23 @@ CsvLine* getHeaderLine(CsvFile* file) {
 }
 
 void freeCsvEntry(CsvEntry* entry) {
-  if (entry->type == STRING) {
+  if (entry->type == CSV_STRING) {
     free(entry->string.ptr);
   }
   free(entry);
 }
 
-void retain(CsvEntry* object) {
+void retainCsvEntry(CsvEntry* object) {
   object->refcount++;
 }
 
-void release(CsvEntry* object) {
+void releaseCsvEntry(CsvEntry* object) {
   if(object->refcount == 0) {
     perror("Unable to release unreferenced entry");
     exit(1);
   }
 
-  object->refcount--;
-
-  if (object->refcount == 0) {
+  if (--object->refcount == 0) {
     freeCsvEntry(object);
   }
 }

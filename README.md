@@ -6,7 +6,7 @@ sage: ./build/cq <file_name> <options>
 Options:
         -h      Show this help message
         -p      Enable printing of the CSV file
-        -e      Expression to evaluate
+        -q      Expression to evaluate
 ```
 
 ### Compile
@@ -17,5 +17,5 @@ make
 ### Run
 ```
     cq test_data.csv -p
-    cq test_data.csv -p -e "..."
+    cq test_data.csv -p -e 'role "admin" EQ age 25 GT AND.'
 ```

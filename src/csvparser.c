@@ -2,7 +2,7 @@
 
 enum CsvDataEntry inferDataType(char* string) {
   if (string == NULL || *string == '\0') {
-    return STRING;
+    return CSV_STRING;
   }
 
   char* cursor = string;
@@ -18,7 +18,7 @@ enum CsvDataEntry inferDataType(char* string) {
   }
 
   if (*cursor == '\0') {
-    return STRING;
+    return CSV_STRING;
   }
 
   while (*cursor != '\0') {
@@ -38,18 +38,18 @@ enum CsvDataEntry inferDataType(char* string) {
       }
       
       if (*cursor != '\0') {
-        return STRING;
+        return CSV_STRING;
       }
       break;
     } else {
-      return STRING;
+      return CSV_STRING;
     }
   }
   if (!has_digits) {
-    return STRING;
+    return CSV_STRING;
   }
 
-  return has_dot ? FLOATING : INTEGER;
+  return has_dot ? CSV_FLOATING : CSV_INTEGER;
 }
 
 CsvLine* parseLine(CsvEntry* line, size_t line_number) {
@@ -59,7 +59,7 @@ CsvLine* parseLine(CsvEntry* line, size_t line_number) {
   size_t field_offset = 0;
 
   while (*cursor != '\0') {
-    while(*cursor != DELIMITER_CHAR && *cursor != '\0') {
+    while(*cursor != CSV_DELIMITER_CHAR && *cursor != '\0') {
       cursor++;
       char_count++;
     }
@@ -74,18 +74,18 @@ CsvLine* parseLine(CsvEntry* line, size_t line_number) {
     CsvEntry* entry = NULL;
 
     if (line_number == 0) {
-      type = STRING;
+      type = CSV_STRING;
     }
 
     switch (type) {
-      case INTEGER:
+      case CSV_INTEGER:
         entry = createCsvInteger(atoi(field));
         break;
-      case FLOATING:
+      case CSV_FLOATING:
         entry = createCsvFloating(atof(field));
         break;
-      case STRING:
-        entry = createCsvString(field, field_length+1);
+      case CSV_STRING:
+        entry = createCsvString(field, field_length);
         break;
     }
 

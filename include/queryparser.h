@@ -1,29 +1,48 @@
-/* SQL Parser */
+/* Stack Based Language Parser */
 #ifndef QUERYPARSER_H
 #define QUERYPARSER_H
 
 #include <stdlib.h>
 
-typedef struct Column {
-    char* name;
-} Column;
+#define QUERY_DELIMITER_CHAR ' '
+#define QUERY_QUOTING_CHAR '"' 
 
-typedef struct SelectItem {
-    Column* column;
-    char* alias;
-} SelectItem;
+enum QueryObjectType {
+    QUERY_STRING,
+    QUERY_INTEGER,
+    QUERY_FLOATING,
+    QUERY_LIST,
+    QUERY_SYMBOL,
+};
 
-typedef struct SelectList {
-    SelectItem** items;
-    size_t count;
-} SelectList;
+typedef struct QueryObject {
+    enum QueryObjectType type;
+    size_t refcount;
+    union {
+        int number;
+        struct {
+            char* ptr;
+            size_t length;
+        } string;
+        struct {
+            struct QueryObject** items;
+            size_t count;
+        } list;
+    };
+} QueryObject;
 
-/*typedef struct SelectExpression {
-    // void (*callback)(SelectList*);
-} SelectExpression;
-
-typedef struct WhereExpression {
-    WhereClauseList* clauses;
-} WhereExpression;*/
+QueryObject* createQueryObject(enum QueryObjectType type);
+QueryObject* createQueryString(char *string, size_t length);
+QueryObject* createQueryInteger(int integer);
+QueryObject* createQueryFloating(float floating);
+QueryObject* createQueryList();
+QueryObject* createQuerySymbol(char *symbol, size_t length);
+void pushQueryItem(QueryObject* list_object, QueryObject* item);
+void freeQueryObject(QueryObject* object);
+void retainQueryObject(QueryObject* object);
+void releaseQueryObject(QueryObject* object);
+enum QueryObjectType inferQueryObjectType(char* token);
+QueryObject* parseQuery(char* query_string);
+char* unquoteString(char* string, size_t length);
 
 #endif

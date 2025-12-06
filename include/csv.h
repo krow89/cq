@@ -3,21 +3,20 @@
 
 #include <stdlib.h>
 
-#define DELIMITER_CHAR ','
-#define QUOTING_CHAR '"' 
+#define CSV_DELIMITER_CHAR ','
+#define CSV_QUOTING_CHAR '"' 
 
 enum CsvDataEntry {
-  INTEGER,
-  FLOATING,
-  STRING,
+  CSV_INTEGER,
+  CSV_FLOATING,
+  CSV_STRING,
 };
 
 typedef struct CsvEntry {
   size_t refcount;
   enum CsvDataEntry type;
   union {
-    int integer;
-    float floating;
+    int number;
     struct {
       char* ptr;
       size_t length;
@@ -48,7 +47,7 @@ void pushLine(CsvFile *file, CsvLine* line);
 void freeCsvEntry(CsvEntry* entry);
 void freeCsvLine(CsvLine* line);
 void freeCsvFile(CsvFile* file);
-void retain(CsvEntry* object);
-void release(CsvEntry* object);
+void retainCsvEntry(CsvEntry* object);
+void releaseCsvEntry(CsvEntry* object);
 
 #endif

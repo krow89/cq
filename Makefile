@@ -33,6 +33,9 @@ clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR) $(EXEC)
 	
 test:
-	$(EXEC) ./test_data.csv -p -e "SELECT id, name AS first_name WHERE age > 25 AND gender > 25 ORDER BY age DESC"
+	$(EXEC) ./test_data.csv -p -q 'role "admin" EQ age 25 GT AND'
+
+address_sanitizer:
+	$(CC) -g -fsanitize=address -Wall -W -Iinclude $(SRC_DIR)/*.c -o build/cq_debug && ./build/cq_debug ./test_data.csv -p -q 'role "admin" EQ age 25 GT AND' 2>&1
 
 .PHONY: all clean up env down build logs test repl
