@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "utils.h"
 #include "csv.h"
 #include "queryparser.h"
@@ -94,4 +95,19 @@ void printQueryObject(QueryObject* object) {
     default:
       printf("Unknown QueryObject type\n");
   }
+}
+
+unsigned char checkSymbol(QueryObject* symbols, char* symbol) {
+  for (size_t i = 0; i < symbols->list.count; i++) {
+    QueryObject* item = symbols->list.items[i];
+    if (strncmp(item->string.ptr, symbol, item->string.length) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+unsigned char checkFunctionSymbol(QueryFunctionRegistry* functions, char* symbol) {
+  QueryFunction* function = getQueryFunction(functions, symbol);
+  return function != NULL;
 }

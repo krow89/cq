@@ -46,14 +46,26 @@ int main(int argc, char **argv) {
       exit(1);
     }
     
-    printf("Evaluating expression: %s\n", expression);
+    printf("---------------\nEvaluating expression: %s\n", expression);
 
     QueryObject* query = parseQuery(expression);
 
     printQueryObject(query);
+
+    QueryObject* context = createQueryList();
+
+    printf("---------------\nExecuting query...\n");
+    executeQuery(query, csv_file, 2, context);
+    
+    printf("---------------\nQuery execution context:\n");
+    printQueryObject(context);
+
+    releaseQueryObject(context);
+    releaseQueryObject(query);
   }
   
   if (checkArgFlags(argc, argv, 'p')) {
+    printf("---------------\nPrinting CSV file contents:\n");
     printCsvFile(csv_file);
   }
 

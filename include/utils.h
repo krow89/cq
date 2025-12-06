@@ -9,5 +9,7 @@ void printCsvHeaderLine(CsvLine* csv_line);
 void printCsvDataLine(CsvLine* csv_line);
 void printCsvFile(CsvFile* csv_file);
 void printQueryObject(QueryObject* object);
+unsigned char checkSymbol(QueryObject* symbols, char* symbol);
+unsigned char checkFunctionSymbol(QueryFunctionRegistry* functions, char* symbol);
 
 #endif
