@@ -1,5 +1,5 @@
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef CSVPARSER_H
+#define CSVPARSER_H
 
 #include <stdio.h>
 #include <string.h>

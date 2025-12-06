@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "csv.h"
-#include "parser.h"
+#include "csvparser.h"
 #include "utils.h"
 
 int main(int argc, char **argv) {

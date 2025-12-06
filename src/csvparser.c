@@ -1,4 +1,4 @@
-#include "parser.h"
+#include "csvparser.h"
 
 enum CsvDataEntry inferDataType(char* string) {
   if (string == NULL || *string == '\0') {
