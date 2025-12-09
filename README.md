@@ -321,7 +321,7 @@ FROM orders.csv
 SELECT name, age FROM data.csv WHERE age % 10 = 0
 
 -- Bitwise operations
-SELECT id, flags & 0x0F AS lower_bits FROM data.csv WHERE (flags & 16) > 0
+SELECT id, flags & 15 AS lower_bits FROM data.csv WHERE (flags & 16) > 0
 ```
 
 ### String Functions
