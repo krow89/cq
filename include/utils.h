@@ -1,15 +1,10 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include "csv.h"
-#include "queryparser.h"
+#include "csv_reader.h"
 
-void printCsvLine(CsvLine* csv_line, char delimiter, size_t col_size);
-void printCsvHeaderLine(CsvLine* csv_line);
-void printCsvDataLine(CsvLine* csv_line);
-void printCsvFile(CsvFile* csv_file);
-void printQueryObject(QueryObject* object);
-unsigned char checkSymbol(QueryObject* symbols, char* symbol);
-unsigned char checkFunctionSymbol(QueryFunctionRegistry* functions, char* symbol);
+char* skipWhitespaces(char* str);
+void print_help(const char* program_name);
+void write_csv_file(const char* filename, ResultSet* result, char delimiter);
 
 #endif

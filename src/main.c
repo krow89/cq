@@ -1,102 +1,103 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include "csv.h"
-#include "csvparser.h"
+#include <stdbool.h>
+#include <getopt.h>
+#include "tokenizer.h"
+#include "parser.h"
+#include "evaluator.h"
+#include "csv_reader.h"
 #include "utils.h"
-#include "argparser.h"
-#include "queryparser.h"
 
-int main(int argc, char **argv) {
-  if (argc < 2 || checkArgFlags(argc, argv, 'h')) {
-    printUsage(argv[0]);
-    exit(1);
-  }
 
-  unsigned char verbose = checkArgFlags(argc, argv, 'v');
-
-  FILE *fp = fopen(argv[1], "r");
-
-  if (fp == NULL) {
-    perror("Error opening CSV file");
-    exit(1);
-  }
-  
-  fseek(fp, 0, SEEK_END);
-  size_t file_size = ftell(fp);
-  fseek(fp, 0, SEEK_SET);
-
-  char* file_buffer = malloc(sizeof(*file_buffer)*(file_size+1));
-  size_t bytes_read = fread(file_buffer, 1, file_size, fp);
-  
-  if (bytes_read == 0 | bytes_read != file_size) {
-    fprintf(stderr, "Error reading the file, read %zu bytes, expected %zu\n", bytes_read, file_size);
-    exit(1);
-  }
-
-  file_buffer[file_size] = '\0';
-
-  fclose(fp);
-
-  CsvFile* csv_file = parseFile(file_buffer);
-  CsvFile* results = createCsvFile();
-  pushLine(results, getHeaderLine(csv_file));
-  
-  if (checkArgFlags(argc, argv, 'q')) {
-    char* expression = getOptionValue(argc, argv, 'q');
-
-    if (expression == NULL) {
-      fprintf(stderr, "No expression provided for evaluation\n");
-      exit(1);
+int main(int argc, char* argv[]) {
+    char* query = NULL;
+    char* output_file = NULL;
+    bool print_count = false;
+    bool print_table = false;
+    char input_separator = ',';
+    char output_delimiter = ',';
+    
+    // parse args
+    int opt;
+    while ((opt = getopt(argc, argv, "hq:o:cps:d:")) != -1) {
+        switch (opt) {
+            case 'h':
+                print_help(argv[0]);
+                return 0;
+            case 'q':
+                query = optarg;
+                break;
+            case 'o':
+                output_file = optarg;
+                break;
+            case 'c':
+                print_count = true;
+                break;
+            case 'p':
+                print_table = true;
+                break;
+            case 's':
+                input_separator = optarg[0];
+                break;
+            case 'd':
+                output_delimiter = optarg[0];
+                break;
+            default:
+                print_help(argv[0]);
+                return 1;
+        }
     }
     
-    if (verbose) printf("---\nEvaluating expression: %s\n", expression);
-
-    QueryObject* query = parseQuery(expression);
-
-    if (verbose) printQueryObject(query);
-
-
-    if (verbose) printf("---\nExecuting query...\n");
-
-    for (size_t i = 0; i < csv_file->count - 1; i++) {
-      QueryObject* context = createQueryList();
-
-      if (verbose) printf("Evaluating data line %zu:\n", i);
-      executeQuery(query, csv_file, i, context);
+    // q arg validation
+    if (!query) {
+        fprintf(stderr, "Error: Query is required (use -q)\n\n");
+        print_help(argv[0]);
+        return 1;
+    }
     
-      if (verbose) {
-        printf("---\nQuery execution context:\n");
-        printQueryObject(context);
-      }
-
-      if (popQueryItem(context)->number) {
-        if (verbose) printf("Row %zu matches query condition.\n", i+1);
-        pushLine(results, getDataLine(csv_file, i));
-      }
-
-      releaseQueryObject(context);
+    // global CSV configuration
+    global_csv_config.delimiter = input_separator;
+    global_csv_config.quote = '"';
+    global_csv_config.has_header = true;
+    
+    // parse SQL query
+    ASTNode* ast = parse(query);
+    if (!ast) {
+        fprintf(stderr, "Error: Parsing failed\n");
+        return 1;
     }
-
-    fprintf(stderr, "%zu rows matched the query.\n", results->count-1);
-
-    releaseQueryObject(query);
-
-    if (checkArgFlags(argc, argv, 'p')) {
-      if (verbose) printf("---\nPrinting CSV result contents:\n");
-      printCsvFile(results);
+    
+    // evaluate query
+    ResultSet* result = evaluate_query(ast);
+    if (!result) {
+        fprintf(stderr, "Error: Query evaluation failed\n");
+        releaseNode(ast);
+        return 1;
     }
-  }
-  else {
-    if (checkArgFlags(argc, argv, 'p')) {
-      if (verbose) printf("---\nPrinting CSV file contents:\n");
-      printCsvFile(csv_file);
+    
+    // output results based on flags
+    if (print_count) {
+        printf("Records: %d\n", result->row_count);
+        printf("Columns: %d\n", result->column_count);
     }
-  }
-  
-
-  freeCsvFile(csv_file);
-  free(file_buffer);
-  return 0;
+    
+    if (print_table) {
+        csv_print_table(result, result->row_count);
+    }
+    
+    if (output_file) {
+        write_csv_file(output_file, result, output_delimiter);
+    }
+    
+    // if no output options specified, default to count
+    if (!print_count && !print_table && !output_file) {
+        printf("Count: %d\n", result->row_count);
+    }
+    
+    // cleanup
+    csv_free(result);
+    releaseNode(ast);
+    
+    return 0;
 }

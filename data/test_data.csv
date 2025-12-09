@@ -1,0 +1,8 @@
+id,name,age,role,height,active
+1,Alice,25,admin,165.5,1
+2,Bob,30,user,178.2,1
+3,Charlie,35,moderator,172.0,0
+4,Diana,28,user,168.3,1
+5,Eve,42,admin,175.8,1
+6,Frank,19,user,180.5,0
+7,Grace,33,moderator,163.2,1
