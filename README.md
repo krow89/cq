@@ -119,6 +119,7 @@ Options:
   -o <file>       Write results as CSV to output file
   -c              Print count of rows
   -p              Print results as formatted table to stdout
+  -v              Print results in vertical format (one column per line)
   -s <char>       Field separator for input CSV (default: ',')
   -d <char>       Output delimiter for -o option (default: ',')
 
@@ -134,6 +135,9 @@ Examples:
 
   # Custom delimiter (TSV input)
   cq -q "SELECT * FROM data.tsv" -s '\t' -p
+  
+  # Vertical output (useful for wide tables)
+  cq -q "SELECT * FROM data.csv LIMIT 5" -v
 
   # Combine options
   cq -q "SELECT name FROM data.csv WHERE age > 25" -o filtered.csv -c

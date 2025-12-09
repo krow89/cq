@@ -22,12 +22,14 @@ void print_help(const char* program_name) {
     printf("  -o <file>    Write result as CSV to output file\n");
     printf("  -c           Print count of rows that match the query\n");
     printf("  -p           Print result as formatted table to stdout\n");
+    printf("  -v           Print result in vertical format (one column per line)\n");
     printf("  -s <char>    Field separator for input CSV (default: ',')\n");
     printf("  -d <char>    Output delimiter for -o option (default: ',')\n");
     printf("\nExample:\n");
     printf("  %s -q \"SELECT name, age WHERE age > 30\" -p\n", program_name);
     printf("  %s -q \"SELECT * WHERE active = 1\" -o output.csv -c\n", program_name);
     printf("  %s -q \"SELECT * FROM data.tsv\" -s '\\t' -p\n", program_name);
+    printf("  %s -q \"SELECT * FROM data.csv LIMIT 5\" -v\n", program_name);
 }
 
 /* Write ResultSet to CSV file */

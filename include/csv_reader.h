@@ -78,6 +78,7 @@ int csv_get_column_index(CsvTable* table, const char* col_name);
 
 /* print table for debugging */
 void csv_print_table(CsvTable* table, int max_rows);
+void csv_print_table_vertical(CsvTable* table, int max_rows);
 
 /* value utilities */
 void value_free(Value* value);

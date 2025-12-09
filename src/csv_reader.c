@@ -430,16 +430,24 @@ Value* csv_get_value_by_name(CsvTable* table, int row_index, const char* col_nam
 void csv_print_table(CsvTable* table, int max_rows) {
     if (!table) return;
     
+    // calculate max column name length for better alignment
+    int max_col_name_len = 0;
+    for (int i = 0; i < table->column_count; i++) {
+        int len = strlen(table->columns[i].name);
+        if (len > max_col_name_len) max_col_name_len = len;
+    }
+    if (max_col_name_len > 20) max_col_name_len = 20;  // cap at 20
+    
     // print header
     for (int i = 0; i < table->column_count; i++) {
-        printf("%-15s", table->columns[i].name);
+        printf("%-*s", max_col_name_len + 1, table->columns[i].name);
         if (i < table->column_count - 1) printf(" | ");
     }
     printf("\n");
     
     // print separator
     for (int i = 0; i < table->column_count; i++) {
-        for (int j = 0; j < 15; j++) printf("-");
+        for (int j = 0; j < max_col_name_len + 1; j++) printf("-");
         if (i < table->column_count - 1) printf("-+-");
     }
     printf("\n");
@@ -449,11 +457,37 @@ void csv_print_table(CsvTable* table, int max_rows) {
     for (int i = 0; i < rows_to_print; i++) {
         for (int j = 0; j < table->rows[i].column_count && j < table->column_count; j++) {
             char* str = value_to_string(&table->rows[i].values[j]);
-            printf("%-15s", str);
+            printf("%-*s", max_col_name_len + 1, str);
             free(str);
             if (j < table->column_count - 1) printf(" | ");
         }
         printf("\n");
+    }
+    
+    if (max_rows > 0 && table->row_count > max_rows) {
+        printf("... (%d more rows)\n", table->row_count - max_rows);
+    }
+}
+
+void csv_print_table_vertical(CsvTable* table, int max_rows) {
+    if (!table) return;
+    
+    // find max column name length for alignment
+    int max_name_len = 0;
+    for (int i = 0; i < table->column_count; i++) {
+        int len = strlen(table->columns[i].name);
+        if (len > max_name_len) max_name_len = len;
+    }
+    
+    // print rows vertically
+    int rows_to_print = (max_rows > 0 && max_rows < table->row_count) ? max_rows : table->row_count;
+    for (int i = 0; i < rows_to_print; i++) {
+        printf("*************************** %d. row ***************************\n", i + 1);
+        for (int j = 0; j < table->column_count && j < table->rows[i].column_count; j++) {
+            char* str = value_to_string(&table->rows[i].values[j]);
+            printf("%*s: %s\n", max_name_len, table->columns[j].name, str);
+            free(str);
+        }
     }
     
     if (max_rows > 0 && table->row_count > max_rows) {

@@ -15,12 +15,13 @@ int main(int argc, char* argv[]) {
     char* output_file = NULL;
     bool print_count = false;
     bool print_table = false;
+    bool vertical_output = false;
     char input_separator = ',';
     char output_delimiter = ',';
     
     // parse args
     int opt;
-    while ((opt = getopt(argc, argv, "hq:o:cps:d:")) != -1) {
+    while ((opt = getopt(argc, argv, "hq:o:cps:d:v")) != -1) {
         switch (opt) {
             case 'h':
                 print_help(argv[0]);
@@ -42,6 +43,10 @@ int main(int argc, char* argv[]) {
                 break;
             case 'd':
                 output_delimiter = optarg[0];
+                break;
+            case 'v':
+                vertical_output = true;
+                print_table = true;  // implicito
                 break;
             default:
                 print_help(argv[0]);
@@ -83,7 +88,11 @@ int main(int argc, char* argv[]) {
     }
     
     if (print_table) {
-        csv_print_table(result, result->row_count);
+        if (vertical_output) {
+            csv_print_table_vertical(result, result->row_count);
+        } else {
+            csv_print_table(result, result->row_count);
+        }
     }
     
     if (output_file) {

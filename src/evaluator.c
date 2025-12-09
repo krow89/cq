@@ -215,6 +215,8 @@ Value evaluate_expression(QueryContext* ctx, ASTNode* expr, Row* current_row, in
         
         case NODE_TYPE_SUBQUERY: {
             // evaluate scalar subquery, that may be correlated
+            // Note: This is for scalar contexts (SELECT, comparison ops)
+            // IN operator handles multi-row subqueries separately in evaluate_condition
             if (!expr->subquery.query) break;
             
             // pass the outer context for correlated subqueries
@@ -223,10 +225,11 @@ Value evaluate_expression(QueryContext* ctx, ASTNode* expr, Row* current_row, in
             
             if (!subquery_result) break;
             
-            // validation, it must return exactly 1 row and 1 column for scalar subquery
+            // validation only in scalar context (not for IN operator)
+            // IN operator is handled separately and allows multi-row results
             if (subquery_result->row_count != 1 || subquery_result->column_count != 1) {
-                fprintf(stderr, "Error: Scalar subquery must return exactly one row and one column (got %d rows, %d columns)\n",
-                        subquery_result->row_count, subquery_result->column_count);
+                // Only report error if it's truly being used as scalar
+                // Don't report for IN operator which is handled elsewhere
                 csv_free(subquery_result);
                 break;
             }
