@@ -213,7 +213,7 @@ The engine automatically infers types from CSV data:
 | `STRING` | Text values | `"Alice"`, `"admin"` |
 | `NULL` | Missing values | Empty CSV cells |
 
-## 📝 CSV Format
+## CSV Format
 
 ### Supported Features
 - Header row (automatically detected)
