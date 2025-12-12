@@ -6,7 +6,9 @@ pub const BuildInfo = struct {
     build: *std.Build,
 
     /// (optional) target requested
-    target: ?std.Target.Query = null,
+    target: std.Build.ResolvedTarget,
+
+    optimize: std.builtin.OptimizeMode,
 
     /// name of artifact to build
     artifact_name: []const u8,
@@ -14,7 +16,9 @@ pub const BuildInfo = struct {
     /// additional headers files
     headers: ?[][]const u8 = null,
 
-    exclude_main: bool = false,
+    build_lib_info: ?struct {
+        excluded_main_src: ?[]const u8 = null,
+    } = null,
 
     /// all src used for build. If null, the defaul src directory (from c project) is used
     srcs: ?struct {
@@ -29,14 +33,20 @@ pub const BuildInfo = struct {
     out: ?struct { prefix: []const u8 } = null,
 };
 
-pub fn buildFor(allocator: std.mem.Allocator, info: BuildInfo) !void {
+pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !void {
     const b = info.build;
-    const target = if (info.target == null) b.standardTargetOptions(.{}) else b.standardTargetOptions(.{ .default_target = info.target.? });
-    const optimize = b.standardOptimizeOption(.{});
+    const target = info.target;
+
+    const optimize = info.optimize;
 
     const module = b.createModule(.{ .link_libc = true, .optimize = optimize, .target = target });
+    const isLib = info.build_lib_info != null;
 
-    const exe = b.addExecutable(.{ .name = info.artifact_name, .root_module = module });
+    const exe = switch (isLib) {
+        false => b.addExecutable(.{ .name = info.artifact_name, .root_module = module }),
+        true => b.addLibrary(.{ .name = info.artifact_name, .root_module = module }),
+    };
+    const excludedMainSrcIfLib = if (isLib) info.build_lib_info.?.excluded_main_src else null;
     module.addIncludePath(b.path("./../include"));
 
     // handle addition header files
@@ -45,33 +55,39 @@ pub fn buildFor(allocator: std.mem.Allocator, info: BuildInfo) !void {
             module.addIncludePath(b.path(ch));
         }
     }
-    try addCFilesFromDir(b, exe, "../src");
+
+    try addCFilesFromDir(b, exe, "../src", excludedMainSrcIfLib);
 
     // TODO: resolve sub-directory at more level too
-    try addCFilesFromDir(b, exe, "../src/external/");
-    const install_prefix = try std.fmt.allocPrint(allocator, "{s}-{s}", .{ @tagName(target.result.os.tag), @tagName(target.result.cpu.arch) });
+    try addCFilesFromDir(b, exe, "../src/external", excludedMainSrcIfLib);
+    const install_prefix = try std.fmt.allocPrint(allocator, "{s}-{s}{s}", .{ @tagName(target.result.os.tag), @tagName(target.result.cpu.arch), if (isLib) "-lib" else "" });
     const art = b.addInstallArtifact(exe, .{});
     art.dest_dir = .{ .custom = install_prefix };
     b.getInstallStep().dependOn(&art.step);
 }
 
-pub fn addCFilesFromDir(
-    b: *std.Build,
-    exe: *std.Build.Step.Compile,
-    dir_path: []const u8,
-) !void {
+pub fn addCFilesFromDir(b: *std.Build, exe: *std.Build.Step.Compile, dir_path: []const u8, exclude_path: ?[]const u8) !void {
     var dir = try std.fs.cwd().openDir(dir_path, .{ .iterate = true });
     defer dir.close();
+    const fullExcludedPath = if (exclude_path != null) try std.fmt.allocPrint(b.allocator, "{s}/{s}", .{ dir_path, exclude_path.? }) else null;
 
     var it = dir.iterate();
     while (try it.next()) |entry| {
         if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".c")) {
             const full_path = try std.fmt.allocPrint(b.allocator, "{s}/{s}", .{ dir_path, entry.name });
             defer b.allocator.free(full_path);
+            if (fullExcludedPath != null and std.mem.eql(u8, fullExcludedPath.?, full_path)) {
+                std.debug.print("Found {s}: ignored\n", .{full_path});
+                continue;
+            }
+            std.debug.print("added source: {s}\n", .{full_path});
             exe.addCSourceFile(.{
                 .file = b.path(full_path),
                 .flags = &.{},
             });
         }
+    }
+    if (fullExcludedPath != null) {
+        defer b.allocator.free(fullExcludedPath.?);
     }
 }
