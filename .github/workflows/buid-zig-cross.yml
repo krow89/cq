@@ -1,0 +1,67 @@
+name: Cross-Build and Test (with zig build system)
+# TODO: add running test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build with zig
+    steps:
+      - uses: actions/checkout@v3
+      - uses: mlugg/setup-zig@v2
+
+      # Linux (arm64)
+      - name: Build for Linux (arm64)
+        working-directory: ./zig
+        run: zig build -Dtarget=aarch64-linux --release=small --summary all
+      - name: Upload artifact for Linux (arm64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cq_Linux-arm64
+          path: zig/zig-out/linux-aarch64/
+
+      # Linux (x86_64)
+      - name: Build for Linux (x86_64)
+        working-directory: ./zig
+        run: zig build -Dtarget=x86_64-linux --release=small --summary all
+      - name: Upload artifact for Linux (x86_64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cq_Linux-x86_64
+          path: zig/zig-out/linux-x86_64/
+
+      # MacOS (arm64)
+      - name: Build for MacOS (arm64) 
+        working-directory: ./zig
+        run: zig build -Dtarget=aarch64-macos --release=small --summary all
+      - name: Upload artifact for MacOS (arm64) 
+        uses: actions/upload-artifact@v4
+        with:
+          name: cq_MacOS-arm64
+          path: zig/zig-out/macos-aarch64/
+
+      # MacOS (x86_64)
+      - name: Build for MacOS (x86_64)
+        working-directory: ./zig
+        run: zig build -Dtarget=x86_64-macos --release=small --summary all
+      - name: Upload artifact for x86_64-macos
+        uses: actions/upload-artifact@v4
+        with:
+          name: cq_MacOS-x86_64
+          path: ./zig/zig-out/macos-x86_64/
+
+      # Windows (x86_64)
+      - name: Build for Windows (x86_64) 
+        working-directory: ./zig
+        run: zig build -Dtarget=x86_64-windows --release=small --summary all
+      - name: Upload artifact for Windows (x86_64) 
+        uses: actions/upload-artifact@v4
+        with:
+          name: cq_Window-x86_64
+          path: zig/zig-out/windows-x86_64/
