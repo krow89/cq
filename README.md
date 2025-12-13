@@ -38,6 +38,7 @@ The `assets/` directory contains ready-to-run SQL examples:
 - **[example_dml.sql](assets/example_dml.sql)** - INSERT, UPDATE, DELETE operations
 - **[example_functions.sql](assets/example_functions.sql)** - String and math functions
 - **[example_joins.sql](assets/example_joins.sql)** - JOIN operations between CSV files
+- **[example_case.sql](assets/example_case.sql)** - CASE expressions (simple and searched forms)
 
 Run any example:
 ```bash
@@ -236,6 +237,139 @@ WHERE age > 20
 SELECT * FROM 'data.csv'
 WHERE /* inline block comment */ status = 'active'
 ```
+
+### CASE Expressions
+
+CASE expressions provide conditional logic in SQL queries. Two forms are supported:
+
+**Simple CASE** - Compares an expression against multiple values:
+```sql
+CASE expression
+    WHEN value1 THEN result1
+    WHEN value2 THEN result2
+    ...
+    ELSE default_result
+END
+```
+
+**Searched CASE** - Evaluates conditions sequentially:
+```sql
+CASE
+    WHEN condition1 THEN result1
+    WHEN condition2 THEN result2
+    ...
+    ELSE default_result
+END
+```
+
+**Examples:**
+```sql
+-- Simple CASE: categorize by exact age match
+SELECT name, age,
+    CASE age
+        WHEN 25 THEN 'Quarter century'
+        WHEN 30 THEN 'Thirty'
+        WHEN 40 THEN 'Forty'
+        ELSE 'Other age'
+    END AS age_label
+FROM users.csv
+
+-- Searched CASE: categorize by age ranges
+SELECT name, age,
+    CASE
+        WHEN age < 18 THEN 'Minor'
+        WHEN age >= 18 AND age < 65 THEN 'Adult'
+        WHEN age >= 65 THEN 'Senior'
+        ELSE 'Unknown'
+    END AS age_group
+FROM users.csv
+
+-- CASE with numeric results
+SELECT name,
+    CASE
+        WHEN age < 30 THEN 1
+        WHEN age < 40 THEN 2
+        ELSE 3
+    END AS tier
+FROM users.csv
+
+-- Nested CASE expressions
+SELECT name,
+    CASE
+        WHEN age < 30 THEN
+            CASE
+                WHEN age < 20 THEN 'Very young'
+                ELSE 'Young'
+            END
+        ELSE 'Older'
+    END AS category
+FROM users.csv
+
+-- CASE in WHERE clause
+SELECT name, age FROM users.csv
+WHERE CASE
+    WHEN role = 'admin' THEN 1
+    WHEN age > 50 THEN 1
+    ELSE 0
+END = 1
+
+-- CASE in ORDER BY
+SELECT name, age FROM users.csv
+ORDER BY CASE
+    WHEN age < 30 THEN 3
+    WHEN age < 50 THEN 2
+    ELSE 1
+END, name
+
+-- CASE without ELSE (returns NULL if no match)
+SELECT name,
+    CASE
+        WHEN age > 100 THEN 'Centenarian'
+    END AS special_status
+FROM users.csv
+```
+
+**Notes:**
+- If no WHEN condition matches and there's no ELSE clause, the result is NULL
+- CASE expressions can be nested
+- CASE works in SELECT, WHERE, ORDER BY, and GROUP BY clauses
+- Both string and numeric results are supported
+
+**Using CASE Aliases in GROUP BY, ORDER BY, and WHERE:**
+
+CQ supports using SELECT column aliases in GROUP BY, ORDER BY, and WHERE clauses, making queries more readable and avoiding repetition of complex expressions:
+
+```sql
+-- GROUP BY with CASE alias
+SELECT CASE WHEN age < 30 THEN 'young' ELSE 'old' END AS category,
+       COUNT(*) AS cnt
+FROM users.csv
+GROUP BY category
+
+-- ORDER BY with CASE alias
+SELECT name,
+       CASE WHEN LENGTH(name) > 5 THEN 'long' ELSE 'short' END AS name_len
+FROM users.csv
+ORDER BY name_len, name
+
+-- WHERE with alias (extension - non-standard SQL)
+SELECT age,
+       CASE WHEN age % 2 = 0 THEN 'even' ELSE 'odd' END AS parity,
+       name
+FROM users.csv
+WHERE parity = 'even'
+
+-- Combine all three
+SELECT name, age,
+       CASE WHEN age < 30 THEN 'junior'
+            WHEN age < 40 THEN 'mid'
+            ELSE 'senior' END AS level
+FROM users.csv
+WHERE level != 'junior'
+ORDER BY level, age
+```
+
+*Note: Using aliases in WHERE is a CQ extension. Standard SQL evaluates WHERE before SELECT, so aliases aren't normally available. However, this feature is convenient for computed columns like CASE expressions.*
 
 ### Aggregate Functions
 ```sql
@@ -895,10 +1029,10 @@ make address_sanitizer
 - Read queries from file (-f option)
 - Read queries from stdin (piping support)
 - SQL comments (-- and /* */)
+- CASE expressions (simple and searched)
 
 ### Planned Features
 - [ ] Window functions (ROW_NUMBER, RANK)
-- [ ] CASE expressions
 - [ ] Index support for large files
 - [ ] Query optimization
 
@@ -979,6 +1113,37 @@ SELECT * FROM 'products.csv' WHERE price BETWEEN 10.0 AND 50.0
 SELECT name FROM 'users.csv' WHERE name BETWEEN 'A' AND 'M'
 SELECT * FROM 'sales.csv' WHERE date BETWEEN '2024-01-01' AND '2024-12-31'
 SELECT name, age FROM 'users.csv' WHERE age * 2 BETWEEN 50 AND 70
+
+-- CASE expressions
+SELECT name, age,
+  CASE age
+    WHEN 25 THEN 'Quarter century'
+    WHEN 30 THEN 'Thirty'
+    ELSE 'Other'
+  END AS age_label
+FROM data.csv
+
+SELECT name,
+  CASE
+    WHEN age < 18 THEN 'Minor'
+    WHEN age < 65 THEN 'Adult'
+    ELSE 'Senior'
+  END AS age_group
+FROM data.csv
+
+SELECT name, age,
+  CASE
+    WHEN age < 30 THEN 1
+    WHEN age < 50 THEN 2
+    ELSE 3
+  END AS tier
+FROM data.csv
+
+SELECT * FROM data.csv
+WHERE CASE WHEN age < 30 THEN 1 ELSE 0 END = 1
+
+SELECT name FROM data.csv
+ORDER BY CASE WHEN age < 30 THEN 2 WHEN age < 50 THEN 1 ELSE 0 END
 
 -- Scalar functions with GROUP BY
 SELECT role, UPPER(role) AS upper_role FROM data.csv GROUP BY role

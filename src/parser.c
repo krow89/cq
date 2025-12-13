@@ -148,6 +148,22 @@ void releaseNode(ASTNode* node) {
             free(node->alter_table.old_column_name);
             free(node->alter_table.new_column_name);
             break;
+        case NODE_TYPE_CASE:
+            releaseNode(node->case_expr.case_expr);
+            if (node->case_expr.when_exprs) {
+                for (int i = 0; i < node->case_expr.when_count; i++) {
+                    releaseNode(node->case_expr.when_exprs[i]);
+                }
+                free(node->case_expr.when_exprs);
+            }
+            if (node->case_expr.then_exprs) {
+                for (int i = 0; i < node->case_expr.when_count; i++) {
+                    releaseNode(node->case_expr.then_exprs[i]);
+                }
+                free(node->case_expr.then_exprs);
+            }
+            releaseNode(node->case_expr.else_expr);
+            break;
         case NODE_TYPE_ASSIGNMENT:
             free(node->assignment.column);
             releaseNode(node->assignment.value);
@@ -574,15 +590,101 @@ static void generate_column_name(ASTNode* node, char* buf, size_t buf_size) {
             snprintf(buf, buf_size, "(subquery)");
             break;
             
+        case NODE_TYPE_CASE:
+            snprintf(buf, buf_size, "CASE");
+            break;
+            
         default:
             snprintf(buf, buf_size, "expr");
             break;
     }
 }
 
+/* parse CASE expression, it handles both simple and searched CASE */
+static ASTNode* parse_case(Parser* parser) {
+    if (!parser_match(parser, TOKEN_TYPE_KEYWORD, "CASE")) {
+        return NULL;
+    }
+    parser_advance(parser); // skip CASE
+    
+    ASTNode* node = create_node(NODE_TYPE_CASE);
+    node->case_expr.case_expr = NULL;
+    node->case_expr.when_exprs = NULL;
+    node->case_expr.then_exprs = NULL;
+    node->case_expr.when_count = 0;
+    node->case_expr.else_expr = NULL;
+    
+    // check if this is simple CASE (has an expression after CASE)
+    // or searched CASE (goes directly to WHEN)
+    Token* next = parser_current_token(parser);
+    if (next->type != TOKEN_TYPE_KEYWORD || strcasecmp(next->value, "WHEN") != 0) {
+        // simple CASE: CASE expr WHEN value THEN result ...
+        node->case_expr.case_expr = parse_expression(parser);
+    }
+    
+    // parse WHEN...THEN clauses
+    int capacity = 4;
+    node->case_expr.when_exprs = malloc(sizeof(ASTNode*) * capacity);
+    node->case_expr.then_exprs = malloc(sizeof(ASTNode*) * capacity);
+    
+    while (parser_match(parser, TOKEN_TYPE_KEYWORD, "WHEN")) {
+        parser_advance(parser); // skip WHEN
+        
+        // ensure capacity
+        if (node->case_expr.when_count >= capacity) {
+            capacity *= 2;
+            node->case_expr.when_exprs = realloc(node->case_expr.when_exprs, sizeof(ASTNode*) * capacity);
+            node->case_expr.then_exprs = realloc(node->case_expr.then_exprs, sizeof(ASTNode*) * capacity);
+        }
+        
+        // parse WHEN condition/value
+        // for simple CASE, this is a value to compare; for searched CASE, this is a condition
+        if (node->case_expr.case_expr) {
+            // simple CASE: parse as expression (value to compare)
+            node->case_expr.when_exprs[node->case_expr.when_count] = parse_expression(parser);
+        } else {
+            // searched CASE: parse as condition (boolean expression)
+            node->case_expr.when_exprs[node->case_expr.when_count] = parse_condition(parser);
+        }
+        
+        // expect THEN
+        if (!parser_match(parser, TOKEN_TYPE_KEYWORD, "THEN")) {
+            fprintf(stderr, "Parse error: Expected THEN after WHEN condition\n");
+            releaseNode(node);
+            return NULL;
+        }
+        parser_advance(parser); // skip THEN
+        
+        // parse THEN result
+        node->case_expr.then_exprs[node->case_expr.when_count] = parse_expression(parser);
+        node->case_expr.when_count++;
+    }
+    
+    // check for ELSE clause
+    if (parser_match(parser, TOKEN_TYPE_KEYWORD, "ELSE")) {
+        parser_advance(parser); // skip ELSE
+        node->case_expr.else_expr = parse_expression(parser);
+    }
+    
+    // expect END
+    if (!parser_match(parser, TOKEN_TYPE_KEYWORD, "END")) {
+        fprintf(stderr, "Parse error: Expected END to close CASE expression\n");
+        releaseNode(node);
+        return NULL;
+    }
+    parser_advance(parser); // skip END
+    
+    return node;
+}
+
 /* function for parsing the primary expression */
 ASTNode* parse_primary(Parser* parser) {
     Token* token = parser_current_token(parser);
+    
+    // handle CASE expressions
+    if (token->type == TOKEN_TYPE_KEYWORD && strcasecmp(token->value, "CASE") == 0) {
+        return parse_case(parser);
+    }
     
     // handle parentheses, it could be a subquery or expression
     if (parser_match(parser, TOKEN_TYPE_PUNCTUATION, "(")) {
@@ -702,6 +804,11 @@ static ASTNode* parse_bitwise_expr(Parser* parser) {
 /* parse primary arithmetic expression for number, identifier, function call, or parenthesized expression */
 static ASTNode* parse_arithmetic_primary(Parser* parser) {
     Token* token = parser_current_token(parser);
+    
+    // handle CASE expressions
+    if (token->type == TOKEN_TYPE_KEYWORD && strcasecmp(token->value, "CASE") == 0) {
+        return parse_case(parser);
+    }
     
     // handle unary operators (- and +)
     if (token->type == TOKEN_TYPE_OPERATOR && 

@@ -25,7 +25,8 @@ static bool is_keyword(const char* str) {
         "RIGHT", "INNER", "OUTER", "FULL", "ON", "LIMIT", "OFFSET", "LIKE", "ILIKE",
         "UNION", "INTERSECT", "EXCEPT", "ALL", "BETWEEN",
         "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "CREATE", "TABLE", 
-        "ALTER", "RENAME", "COLUMN", "ADD", "DROP", "TO", NULL
+        "ALTER", "RENAME", "COLUMN", "ADD", "DROP", "TO",
+        "CASE", "WHEN", "THEN", "ELSE", "END", NULL
     };
     
     for (int i = 0; keywords[i] != NULL; i++) {

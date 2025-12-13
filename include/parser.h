@@ -28,6 +28,7 @@ typedef enum {
     NODE_TYPE_ASSIGNMENT,
     NODE_TYPE_CREATE_TABLE,
     NODE_TYPE_ALTER_TABLE,
+    NODE_TYPE_CASE,
 } ASTNodeType;
 
 typedef enum {
@@ -165,6 +166,14 @@ struct ASTNode {
             char* old_column_name;  // for RENAME operation
             char* new_column_name;  // for RENAME and ADD operations
         } alter_table;
+
+        struct {
+            ASTNode* case_expr;     // expression after CASE (NULL for searched CASE)
+            ASTNode** when_exprs;   // array of WHEN expressions
+            ASTNode** then_exprs;   // array of THEN result expressions
+            int when_count;         // number of WHEN/THEN pairs
+            ASTNode* else_expr;     // ELSE expression (NULL if not present)
+        } case_expr;
 
         char* literal;
         char* identifier;

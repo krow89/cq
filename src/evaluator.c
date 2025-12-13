@@ -190,6 +190,37 @@ Value* resolve_column(QueryContext* ctx, const char* column_name, Row* current_r
                     return &ctx->outer_row->values[col_index];
                 }
             }
+            
+            // EXTENSION: if still not found, check if it's a SELECT alias (non-standard SQL)
+            // this allows WHERE to reference computed columns from SELECT
+            if (ctx->query && ctx->query->query.select) {
+                ASTNode* select_node = ctx->query->query.select;
+                if (select_node->type == NODE_TYPE_SELECT && select_node->select.column_nodes) {
+                    // look for alias in SELECT columns
+                    for (int i = 0; i < select_node->select.column_count; i++) {
+                        const char* col_str = select_node->select.columns[i];
+                        if (!col_str) continue;
+                        
+                        // check for " AS alias" pattern
+                        const char* as_pos = cq_strcasestr(col_str, " AS ");
+                        if (as_pos) {
+                            const char* alias_start = as_pos + 4;
+                            while (*alias_start && isspace(*alias_start)) alias_start++;
+                            
+                            // check if this alias matches column_name
+                            if (strcasecmp(alias_start, column_name) == 0) {
+                                // found the alias! evaluate the expression and store in context
+                                // we need to store this temporarily for WHERE evaluation
+                                static Value computed_value;
+                                computed_value = evaluate_expression(ctx, select_node->select.column_nodes[i], 
+                                                                    current_row, table_index);
+                                return &computed_value;
+                            }
+                        }
+                    }
+                }
+            }
+            
             return NULL;
         }
         
@@ -430,6 +461,66 @@ Value evaluate_expression(QueryContext* ctx, ASTNode* expr, Row* current_row, in
                 result.double_value = result_val;
             }
             
+            return result;
+        }
+            
+        case NODE_TYPE_CASE: {
+            // evaluate CASE expression
+            if (!expr->case_expr.when_exprs || !expr->case_expr.then_exprs) {
+                result.type = VALUE_TYPE_NULL;
+                return result;
+            }
+            
+            // check if this is simple CASE or searched CASE
+            bool is_simple_case = (expr->case_expr.case_expr != NULL);
+            Value case_value;
+            
+            if (is_simple_case) {
+                // simple CASE: evaluate the expression after CASE
+                case_value = evaluate_expression(ctx, expr->case_expr.case_expr, current_row, table_index);
+            }
+            
+            // iterate through WHEN/THEN pairs
+            for (int i = 0; i < expr->case_expr.when_count; i++) {
+                bool when_matches = false;
+                
+                if (is_simple_case) {
+                    // simple CASE: compare case_value with each WHEN value
+                    Value when_value = evaluate_expression(ctx, expr->case_expr.when_exprs[i], current_row, table_index);
+                    when_matches = (value_compare(&case_value, &when_value) == 0);
+                    
+                    // free string values if needed
+                    if (when_value.type == VALUE_TYPE_STRING && when_value.string_value) {
+                        free((char*)when_value.string_value);
+                    }
+                } else {
+                    // searched CASE: WHEN clause is a condition node (age > 30, etc.)
+                    when_matches = evaluate_condition(ctx, expr->case_expr.when_exprs[i], current_row, table_index);
+                }
+                
+                if (when_matches) {
+                    // evaluate and return the corresponding THEN expression
+                    result = evaluate_expression(ctx, expr->case_expr.then_exprs[i], current_row, table_index);
+                    
+                    // free case_value string if needed
+                    if (is_simple_case && case_value.type == VALUE_TYPE_STRING && case_value.string_value) {
+                        free((char*)case_value.string_value);
+                    }
+                    return result;
+                }
+            }
+            
+            // no WHEN matched, evaluate ELSE (or return NULL if no ELSE)
+            if (expr->case_expr.else_expr) {
+                result = evaluate_expression(ctx, expr->case_expr.else_expr, current_row, table_index);
+            } else {
+                result.type = VALUE_TYPE_NULL;
+            }
+            
+            // free case_value string if needed
+            if (is_simple_case && case_value.type == VALUE_TYPE_STRING && case_value.string_value) {
+                free((char*)case_value.string_value);
+            }
             return result;
         }
             
@@ -1251,6 +1342,76 @@ static GroupResult* create_groups(Row** rows, int row_count, CsvTable* table, co
     return result;
 }
 
+/* create groups by evaluating a SELECT expression for each row */
+static GroupResult* create_groups_by_expression(QueryContext* ctx, Row** rows, int row_count, 
+                                                 ASTNode* group_expr) {
+    GroupResult* result = calloc(1, sizeof(GroupResult));
+    result->group_capacity = 16;
+    result->groups = malloc(sizeof(GroupedRows) * result->group_capacity);
+    result->group_count = 0;
+    
+    for (int i = 0; i < row_count; i++) {
+        // evaluate the grouping expression for this row
+        Value group_val = evaluate_expression(ctx, group_expr, rows[i], 0);
+        
+        // convert value to string for grouping key
+        char key_buf[256];
+        switch (group_val.type) {
+            case VALUE_TYPE_NULL:
+                strcpy(key_buf, "NULL");
+                break;
+            case VALUE_TYPE_INTEGER:
+                snprintf(key_buf, sizeof(key_buf), "%lld", group_val.int_value);
+                break;
+            case VALUE_TYPE_DOUBLE:
+                snprintf(key_buf, sizeof(key_buf), "%.6f", group_val.double_value);
+                break;
+            case VALUE_TYPE_STRING:
+                strncpy(key_buf, group_val.string_value, sizeof(key_buf) - 1);
+                key_buf[sizeof(key_buf) - 1] = '\0';
+                break;
+        }
+        
+        // free string value if allocated
+        if (group_val.type == VALUE_TYPE_STRING && group_val.string_value) {
+            free((char*)group_val.string_value);
+        }
+        
+        // find or create group
+        int group_idx = -1;
+        for (int j = 0; j < result->group_count; j++) {
+            if (strcmp(result->groups[j].group_key, key_buf) == 0) {
+                group_idx = j;
+                break;
+            }
+        }
+        
+        if (group_idx < 0) {
+            // create new group
+            if (result->group_count >= result->group_capacity) {
+                result->group_capacity *= 2;
+                result->groups = realloc(result->groups, sizeof(GroupedRows) * result->group_capacity);
+            }
+            
+            group_idx = result->group_count++;
+            result->groups[group_idx].group_key = strdup(key_buf);
+            result->groups[group_idx].row_capacity = 16;
+            result->groups[group_idx].rows = malloc(sizeof(Row*) * result->groups[group_idx].row_capacity);
+            result->groups[group_idx].row_count = 0;
+        }
+        
+        // add row to group
+        GroupedRows* group = &result->groups[group_idx];
+        if (group->row_count >= group->row_capacity) {
+            group->row_capacity *= 2;
+            group->rows = realloc(group->rows, sizeof(Row*) * group->row_capacity);
+        }
+        group->rows[group->row_count++] = rows[i];
+    }
+    
+    return result;
+}
+
 static void free_groups(GroupResult* groups) {
     if (!groups) return;
     
@@ -1693,21 +1854,33 @@ static ResultSet* build_aggregated_result(QueryContext* ctx, GroupResult* groups
                     }
                 }
             } else {
-                /* regular column - use first row's value from the group */
-                int col_idx = find_column_index_with_fallback(ctx->tables[0].table, col_name);
+                /* regular column - check if we have a column_node (expression) for it */
+                ASTNode* col_node = select_node->select.column_nodes ? select_node->select.column_nodes[col] : NULL;
                 
-                if (col_idx >= 0 && group->row_count > 0) {
-                    Value* src = &group->rows[0]->values[col_idx];
-                    Value* dst = &result->rows[g].values[col];
-                    
-                    dst->type = src->type;
-                    if (src->type == VALUE_TYPE_STRING && src->string_value) {
-                        dst->string_value = strdup(src->string_value);
+                if (col_node && col_node->type != NODE_TYPE_IDENTIFIER) {
+                    /* this is an expression (CASE, function call, etc.) - evaluate it on first row */
+                    if (group->row_count > 0) {
+                        result->rows[g].values[col] = evaluate_expression(ctx, col_node, group->rows[0], 0);
                     } else {
-                        dst->int_value = src->int_value;
+                        result->rows[g].values[col].type = VALUE_TYPE_NULL;
                     }
                 } else {
-                    result->rows[g].values[col].type = VALUE_TYPE_NULL;
+                    /* regular column reference - use first row's value from the group */
+                    int col_idx = find_column_index_with_fallback(ctx->tables[0].table, col_name);
+                    
+                    if (col_idx >= 0 && group->row_count > 0) {
+                        Value* src = &group->rows[0]->values[col_idx];
+                        Value* dst = &result->rows[g].values[col];
+                        
+                        dst->type = src->type;
+                        if (src->type == VALUE_TYPE_STRING && src->string_value) {
+                            dst->string_value = strdup(src->string_value);
+                        } else {
+                            dst->int_value = src->int_value;
+                        }
+                    } else {
+                        result->rows[g].values[col].type = VALUE_TYPE_NULL;
+                    }
                 }
             }
         }
@@ -2783,8 +2956,42 @@ static ResultSet* evaluate_query_internal(ASTNode* query_ast, Row* outer_row, Cs
     if (group_by && group_by->type == NODE_TYPE_GROUP_BY && group_by->identifier) {
         // group rows by column if specified
         const char* group_column = group_by->identifier;
+        GroupResult* groups = NULL;
         
-        GroupResult* groups = create_groups(filtered_rows, filtered_count, ctx->tables[0].table, group_column);
+        // check if group_column is an alias in the SELECT clause
+        ASTNode* select_node = query_ast->query.select;
+        ASTNode* group_expr = NULL;
+        
+        if (select_node && select_node->type == NODE_TYPE_SELECT && select_node->select.column_nodes) {
+            // look for the alias in SELECT columns
+            for (int i = 0; i < select_node->select.column_count; i++) {
+                const char* col_str = select_node->select.columns[i];
+                if (!col_str) continue;
+                
+                // check for " AS alias" pattern (case insensitive)
+                const char* as_pos = cq_strcasestr(col_str, " AS ");
+                if (as_pos) {
+                    // extract alias name
+                    const char* alias_start = as_pos + 4;
+                    // skip whitespace
+                    while (*alias_start && isspace(*alias_start)) alias_start++;
+                    
+                    // check if this alias matches group_column
+                    if (strcasecmp(alias_start, group_column) == 0) {
+                        // found it! use the corresponding column_node for grouping
+                        group_expr = select_node->select.column_nodes[i];
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // create groups using expression or column name
+        if (group_expr) {
+            groups = create_groups_by_expression(ctx, filtered_rows, filtered_count, group_expr);
+        } else {
+            groups = create_groups(filtered_rows, filtered_count, ctx->tables[0].table, group_column);
+        }
         
         // compute aggregated result
         result = build_aggregated_result(ctx, groups, query_ast->query.select);
@@ -2829,19 +3036,19 @@ static ResultSet* evaluate_query_internal(ASTNode* query_ast, Row* outer_row, Cs
             sort_result(result, query_ast->query.select, order_by->order_by.column, order_by->order_by.descending);
         }
     } else {
-        // apply ORDER BY for non-aggregated results
+        // build result first so ORDER BY can use aliases
+        result = build_result(ctx, filtered_rows, filtered_count);
+        
+        // apply ORDER BY for non-aggregated results (after building result to support aliases)
         ASTNode* order_by = query_ast->query.order_by;
         if (order_by && order_by->type == NODE_TYPE_ORDER_BY) {
             const char* col_name = order_by->order_by.column;
             bool descending = order_by->order_by.descending;
             
             if (col_name) {
-                sort_rows(filtered_rows, filtered_count, ctx->tables[0].table, col_name, descending);
+                sort_result(result, query_ast->query.select, col_name, descending);
             }
         }
-        
-        // build result
-        result = build_result(ctx, filtered_rows, filtered_count);
     }
     
     free(filtered_rows);
