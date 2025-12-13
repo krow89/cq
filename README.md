@@ -264,7 +264,8 @@ cq [OPTIONS]
 
 Options:
   -h              Show help message
-  -q <query>      SQL query to execute (required)
+  -q <query>      SQL query to execute (use '-' to read from stdin)
+  -f <file>       Read SQL query from file
   -o <file>       Write results as CSV to output file
   -c              Print count of rows
   -p              Print results as formatted table to stdout
@@ -275,6 +276,13 @@ Options:
 Examples:
   # Print formatted table
   cq -q "SELECT name, age WHERE age > 30" -p
+
+  # Read query from file
+  cq -f query.sql -p
+
+  # Read query from stdin (piping)
+  echo "SELECT * WHERE active = 1" | cq -q - -p
+  cat query.sql | cq -q - -o output.csv
 
   # Save to CSV file
   cq -q "SELECT * WHERE active = 1" -o output.csv
@@ -831,6 +839,8 @@ make address_sanitizer
 - Data manipulation (INSERT, UPDATE, DELETE)
 - CREATE TABLE (save query results, define schema)
 - ALTER TABLE (rename/add/drop columns)
+- Read queries from file (-f option)
+- Read queries from stdin (piping support)
 
 ### Planned Features
 - [ ] More aggregate functions (STDDEV, MEDIAN)
@@ -838,8 +848,8 @@ make address_sanitizer
 - [ ] CASE expressions
 - [ ] Index support for large files
 - [ ] Query optimization
-- [ ] READ from STDIN for piping data
-- [ ] READ queries from file
+- [ ] BETWEEN
+- [ ] SQL Comments
 
 ## 🔗 Additional Resources
 

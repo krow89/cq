@@ -12,22 +12,27 @@
 
 int main(int argc, char* argv[]) {
     char* query = NULL;
+    char* query_file = NULL;
     char* output_file = NULL;
     bool print_count = false;
     bool print_table = false;
     bool vertical_output = false;
+    bool query_allocated = false;  // track if we need to free query
     char input_separator = ',';
     char output_delimiter = ',';
     
     // parse args
     int opt;
-    while ((opt = getopt(argc, argv, "hq:o:cps:d:v")) != -1) {
+    while ((opt = getopt(argc, argv, "hq:f:o:cps:d:v")) != -1) {
         switch (opt) {
             case 'h':
                 print_help(argv[0]);
                 return 0;
             case 'q':
                 query = optarg;
+                break;
+            case 'f':
+                query_file = optarg;
                 break;
             case 'o':
                 output_file = optarg;
@@ -54,9 +59,27 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    // q arg validation
-    if (!query) {
-        fprintf(stderr, "Error: Query is required (use -q)\n\n");
+    // determine query source (priority: -f, -q, stdin)
+    if (query_file) {
+        // read from file
+        query = read_query_from_file(query_file);
+        if (!query) {
+            return 1;
+        }
+        query_allocated = true;
+    } else if (query) {
+        // check if query is "-" which means read from stdin
+        if (strcmp(query, "-") == 0) {
+            query = read_query_from_stdin();
+            if (!query) {
+                return 1;
+            }
+            query_allocated = true;
+        }
+        // else use query as-is from command line
+    } else {
+        // no -q or -f specified
+        fprintf(stderr, "Error: Query is required (use -q or -f)\n\n");
         print_help(argv[0]);
         return 1;
     }
@@ -107,6 +130,9 @@ int main(int argc, char* argv[]) {
     // cleanup
     csv_free(result);
     releaseNode(ast);
+    if (query_allocated) {
+        free(query);
+    }
     
     return 0;
 }

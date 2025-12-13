@@ -98,21 +98,123 @@ void print_help(const char* program_name) {
     printf("Usage: %s [OPTIONS]\n", program_name);
     printf("\nOptions:\n");
     printf("  -h           Show this help message\n");
-    printf("  -q <query>   SQL query to execute (required)\n");
+    printf("  -q <query>   SQL query to execute (use '-' to read from stdin)\n");
+    printf("  -f <file>    Read SQL query from file\n");
     printf("  -o <file>    Write result as CSV to output file\n");
     printf("  -c           Print count of rows that match the query\n");
     printf("  -p           Print result as formatted table to stdout\n");
     printf("  -v           Print result in vertical format (one column per line)\n");
     printf("  -s <char>    Field separator for input CSV (default: ',')\n");
     printf("  -d <char>    Output delimiter for -o option (default: ',')\n");
-    printf("\nExample:\n");
+    printf("\nExamples:\n");
     printf("  %s -q \"SELECT name, age WHERE age > 30\" -p\n", program_name);
-    printf("  %s -q \"SELECT * WHERE active = 1\" -o output.csv -c\n", program_name);
+    printf("  %s -f query.sql -p\n", program_name);
+    printf("  echo \"SELECT * WHERE active = 1\" | %s -q - -p\n", program_name);
     printf("  %s -q \"SELECT * FROM data.tsv\" -s '\\t' -p\n", program_name);
     printf("  %s -q \"SELECT * FROM data.csv LIMIT 5\" -v\n", program_name);
 }
 
-/* Write ResultSet to CSV file */
+/*
+ * read SQL query from a file
+ * returns: dynamically allocated string containing the query (caller must free)
+ *          NULL on error
+ */
+char* read_query_from_file(const char* filename) {
+    FILE* f = fopen(filename, "r");
+    if (!f) {
+        fprintf(stderr, "Error: Cannot open query file '%s'\n", filename);
+        return NULL;
+    }
+    
+    // get file size
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    if (file_size <= 0) {
+        fprintf(stderr, "Error: Query file is empty\n");
+        fclose(f);
+        return NULL;
+    }
+    
+    // allocate buffer and read
+    char* query = malloc(file_size + 1);
+    if (!query) {
+        fprintf(stderr, "Error: Memory allocation failed\n");
+        fclose(f);
+        return NULL;
+    }
+    
+    size_t bytes_read = fread(query, 1, file_size, f);
+    query[bytes_read] = '\0';
+    fclose(f);
+    
+    // trim trailing whitespace/newlines
+    while (bytes_read > 0 && (query[bytes_read - 1] == '\n' || 
+                              query[bytes_read - 1] == '\r' || 
+                              query[bytes_read - 1] == ' ' ||
+                              query[bytes_read - 1] == '\t')) {
+        query[--bytes_read] = '\0';
+    }
+    
+    return query;
+}
+
+/*
+ * read SQL query from stdin
+ * returns: dynamically allocated string containing the query (caller must free)
+ *          NULL on error
+ */
+char* read_query_from_stdin(void) {
+    size_t capacity = 1024;
+    size_t length = 0;
+    char* query = malloc(capacity);
+    
+    if (!query) {
+        fprintf(stderr, "Error: Memory allocation failed\n");
+        return NULL;
+    }
+    
+    // read from stdin in chunks
+    while (1) {
+        if (length + 512 >= capacity) {
+            capacity *= 2;
+            char* new_query = realloc(query, capacity);
+            if (!new_query) {
+                fprintf(stderr, "Error: Memory allocation failed\n");
+                free(query);
+                return NULL;
+            }
+            query = new_query;
+        }
+        
+        size_t bytes_read = fread(query + length, 1, 512, stdin);
+        if (bytes_read == 0) {
+            break;
+        }
+        length += bytes_read;
+    }
+    
+    if (length == 0) {
+        fprintf(stderr, "Error: No query provided on stdin\n");
+        free(query);
+        return NULL;
+    }
+    
+    query[length] = '\0';
+    
+    // trim trailing whitespace/newlines
+    while (length > 0 && (query[length - 1] == '\n' || 
+                          query[length - 1] == '\r' || 
+                          query[length - 1] == ' ' ||
+                          query[length - 1] == '\t')) {
+        query[--length] = '\0';
+    }
+    
+    return query;
+}
+
+/* wsrite ResultSet to CSV file */
 void write_csv_file(const char* filename, ResultSet* result, char delimiter) {
     FILE* f = fopen(filename, "w");
     if (!f) {
