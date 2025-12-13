@@ -3,8 +3,8 @@ name: Cross-Build and Test (with zig build system)
 
 on:
   push:
-    branches: ["release"]
-  workflow_dispatch:
+    tags:
+      - v*
 
 jobs:
   build:
@@ -14,10 +14,10 @@ jobs:
       matrix:
         target:  # Valid zig targets here
           - aarch64-linux
-          - x86_64-linux
-          - aarch64-macos
-          - x86_64-macos
-          - x86_64-windows
+          # - x86_64-linux
+          # - aarch64-macos
+          # - x86_64-macos
+          # - x86_64-windows
       
     steps:
       - uses: actions/checkout@v3
@@ -41,3 +41,25 @@ jobs:
         with:
           name: libcq_${{matrix.target}}_shared
           path: zig/zig-out/${{matrix.target}}_shared/
+      
+      - name: Create Release for cq_${{matrix.target}}
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release cq_${{matrix.target}} ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release cq_${{matrix.target}}
+        id: upload-release-asset 
+        uses: alexellis/upload-assets@0.2.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_paths: '["zig/zig-out/${{matrix.target}}/*"]'
+          asset_name: cq_${{matrix.target}}.zip
+          asset_content_type: application/zip
