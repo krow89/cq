@@ -2953,45 +2953,147 @@ static ResultSet* evaluate_query_internal(ASTNode* query_ast, Row* outer_row, Cs
     ASTNode* group_by = query_ast->query.group_by;
     ResultSet* result;
     
-    if (group_by && group_by->type == NODE_TYPE_GROUP_BY && group_by->identifier) {
-        // group rows by column if specified
-        const char* group_column = group_by->identifier;
+    if (group_by && group_by->type == NODE_TYPE_GROUP_BY && group_by->group_by.columns && group_by->group_by.column_count > 0) {
+        // group rows by columns
         GroupResult* groups = NULL;
-        
-        // check if group_column is an alias in the SELECT clause
         ASTNode* select_node = query_ast->query.select;
-        ASTNode* group_expr = NULL;
         
-        if (select_node && select_node->type == NODE_TYPE_SELECT && select_node->select.column_nodes) {
-            // look for the alias in SELECT columns
-            for (int i = 0; i < select_node->select.column_count; i++) {
-                const char* col_str = select_node->select.columns[i];
-                if (!col_str) continue;
-                
-                // check for " AS alias" pattern (case insensitive)
-                const char* as_pos = cq_strcasestr(col_str, " AS ");
-                if (as_pos) {
-                    // extract alias name
-                    const char* alias_start = as_pos + 4;
-                    // skip whitespace
-                    while (*alias_start && isspace(*alias_start)) alias_start++;
+        // build array of column names/expressions for grouping
+        char** group_columns = malloc(sizeof(char*) * group_by->group_by.column_count);
+        ASTNode** group_exprs = malloc(sizeof(ASTNode*) * group_by->group_by.column_count);
+        int expr_count = 0;
+        
+        for (int g = 0; g < group_by->group_by.column_count; g++) {
+            const char* group_column = group_by->group_by.columns[g];
+            group_columns[g] = (char*)group_column;
+            group_exprs[g] = NULL;
+            
+            // check if group_column is an alias in the SELECT clause
+            if (select_node && select_node->type == NODE_TYPE_SELECT && select_node->select.column_nodes) {
+                for (int i = 0; i < select_node->select.column_count; i++) {
+                    const char* col_str = select_node->select.columns[i];
+                    if (!col_str) continue;
                     
-                    // check if this alias matches group_column
-                    if (strcasecmp(alias_start, group_column) == 0) {
-                        // found it! use the corresponding column_node for grouping
-                        group_expr = select_node->select.column_nodes[i];
-                        break;
+                    // check for " AS alias" pattern
+                    const char* as_pos = cq_strcasestr(col_str, " AS ");
+                    if (as_pos) {
+                        const char* alias_start = as_pos + 4;
+                        while (*alias_start && isspace(*alias_start)) alias_start++;
+                        
+                        if (strcasecmp(alias_start, group_column) == 0) {
+                            // found alias! use the expression
+                            group_exprs[g] = select_node->select.column_nodes[i];
+                            expr_count++;
+                            break;
+                        }
                     }
                 }
             }
         }
         
-        // create groups using expression or column name
-        if (group_expr) {
-            groups = create_groups_by_expression(ctx, filtered_rows, filtered_count, group_expr);
+        // create groups with composite keys
+        if (group_by->group_by.column_count == 1 && !group_exprs[0]) {
+            // single column, no expression - use optimized single-column grouping
+            groups = create_groups(filtered_rows, filtered_count, ctx->tables[0].table, group_columns[0]);
+        } else if (group_by->group_by.column_count == 1 && group_exprs[0]) {
+            // single expression
+            groups = create_groups_by_expression(ctx, filtered_rows, filtered_count, group_exprs[0]);
         } else {
-            groups = create_groups(filtered_rows, filtered_count, ctx->tables[0].table, group_column);
+            // multiple columns - create composite grouping
+            groups = calloc(1, sizeof(GroupResult));
+            groups->group_capacity = 16;
+            groups->groups = malloc(sizeof(GroupedRows) * groups->group_capacity);
+            groups->group_count = 0;
+            
+            for (int i = 0; i < filtered_count; i++) {
+                // build composite key from all group columns
+                char composite_key[1024] = "";
+                
+                for (int g = 0; g < group_by->group_by.column_count; g++) {
+                    if (g > 0) strcat(composite_key, "\t");  // use tab as separator
+                    
+                    char key_part[256];
+                    if (group_exprs[g]) {
+                        // evaluate expression
+                        Value val = evaluate_expression(ctx, group_exprs[g], filtered_rows[i], 0);
+                        switch (val.type) {
+                            case VALUE_TYPE_NULL:
+                                strcpy(key_part, "NULL");
+                                break;
+                            case VALUE_TYPE_INTEGER:
+                                snprintf(key_part, sizeof(key_part), "%lld", val.int_value);
+                                break;
+                            case VALUE_TYPE_DOUBLE:
+                                snprintf(key_part, sizeof(key_part), "%.6f", val.double_value);
+                                break;
+                            case VALUE_TYPE_STRING:
+                                strncpy(key_part, val.string_value, sizeof(key_part) - 1);
+                                key_part[sizeof(key_part) - 1] = '\0';
+                                free((char*)val.string_value);
+                                break;
+                        }
+                    } else {
+                        // get column value
+                        int col_idx = csv_get_column_index(ctx->tables[0].table, group_columns[g]);
+                        if (col_idx >= 0) {
+                            Value* val = &filtered_rows[i]->values[col_idx];
+                            switch (val->type) {
+                                case VALUE_TYPE_NULL:
+                                    strcpy(key_part, "NULL");
+                                    break;
+                                case VALUE_TYPE_INTEGER:
+                                    snprintf(key_part, sizeof(key_part), "%lld", val->int_value);
+                                    break;
+                                case VALUE_TYPE_DOUBLE:
+                                    snprintf(key_part, sizeof(key_part), "%.6f", val->double_value);
+                                    break;
+                                case VALUE_TYPE_STRING:
+                                    strncpy(key_part, val->string_value, sizeof(key_part) - 1);
+                                    key_part[sizeof(key_part) - 1] = '\0';
+                                    break;
+                            }
+                        } else {
+                            strcpy(key_part, "NULL");
+                        }
+                    }
+                    strcat(composite_key, key_part);
+                }
+                
+                // find or create group
+                int group_idx = -1;
+                for (int j = 0; j < groups->group_count; j++) {
+                    if (strcmp(groups->groups[j].group_key, composite_key) == 0) {
+                        group_idx = j;
+                        break;
+                    }
+                }
+                
+                if (group_idx < 0) {
+                    // create new group
+                    if (groups->group_count >= groups->group_capacity) {
+                        groups->group_capacity *= 2;
+                        groups->groups = realloc(groups->groups, sizeof(GroupedRows) * groups->group_capacity);
+                    }
+                    
+                    group_idx = groups->group_count++;
+                    groups->groups[group_idx].group_key = strdup(composite_key);
+                    groups->groups[group_idx].row_capacity = 16;
+                    groups->groups[group_idx].rows = malloc(sizeof(Row*) * groups->groups[group_idx].row_capacity);
+                    groups->groups[group_idx].row_count = 0;
+                }
+                
+                // add row to group
+                GroupedRows* group = &groups->groups[group_idx];
+                if (group->row_count >= group->row_capacity) {
+                    group->row_capacity *= 2;
+                    group->rows = realloc(group->rows, sizeof(Row*) * group->row_capacity);
+                }
+                group->rows[group->row_count++] = filtered_rows[i];
+            }
         }
+        
+        free(group_columns);
+        free(group_exprs);
         
         // compute aggregated result
         result = build_aggregated_result(ctx, groups, query_ast->query.select);

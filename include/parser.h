@@ -95,6 +95,11 @@ struct ASTNode {
         } order_by;
         
         struct {
+            char** columns;       // array of column names for GROUP BY
+            int column_count;     // number of columns
+        } group_by;
+        
+        struct {
             char* table;  // filename or table name (NULL if subquery)
             ASTNode* subquery;  // subquery node (NULL if table)
             char* alias;  // optional alias
@@ -176,7 +181,7 @@ struct ASTNode {
         } case_expr;
 
         char* literal;
-        char* identifier;
+        char* identifier;  // used for generic identifiers, not GROUP BY
         char* alias;
     };
 };

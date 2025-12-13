@@ -82,6 +82,14 @@ void releaseNode(ASTNode* node) {
         case NODE_TYPE_ORDER_BY:
             free(node->order_by.column);
             break;
+        case NODE_TYPE_GROUP_BY:
+            if (node->group_by.columns) {
+                for (int i = 0; i < node->group_by.column_count; i++) {
+                    free(node->group_by.columns[i]);
+                }
+                free(node->group_by.columns);
+            }
+            break;
         case NODE_TYPE_FROM:
             free(node->from.table);
             releaseNode(node->from.subquery);
@@ -1229,8 +1237,26 @@ ASTNode* parse_group_by(Parser* parser) {
     
     ASTNode* node = create_node(NODE_TYPE_GROUP_BY);
     
-    // parse qualified identifier
-    node->identifier = parse_qualified_identifier(parser);
+    // allocate array for column names
+    int capacity = 4;
+    node->group_by.columns = malloc(sizeof(char*) * capacity);
+    node->group_by.column_count = 0;
+    
+    // parse first column
+    node->group_by.columns[node->group_by.column_count++] = parse_qualified_identifier(parser);
+    
+    // parse additional columns separated by commas
+    while (parser_match(parser, TOKEN_TYPE_PUNCTUATION, ",")) {
+        parser_advance(parser);
+        
+        // expand array if needed
+        if (node->group_by.column_count >= capacity) {
+            capacity *= 2;
+            node->group_by.columns = realloc(node->group_by.columns, sizeof(char*) * capacity);
+        }
+        
+        node->group_by.columns[node->group_by.column_count++] = parse_qualified_identifier(parser);
+    }
     
     return node;
 }

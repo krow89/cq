@@ -156,7 +156,8 @@ void test_group_by() {
     assert(ast != NULL);
     assert(ast->query.group_by != NULL);
     assert_node_type(ast->query.group_by, NODE_TYPE_GROUP_BY);
-    assert(strcmp(ast->query.group_by->identifier, "role") == 0);
+    assert(ast->query.group_by->group_by.column_count == 1);
+    assert(strcmp(ast->query.group_by->group_by.columns[0], "role") == 0);
     
     releaseNode(ast);
     printf("✓ test_group_by passed\n\n");
@@ -172,7 +173,8 @@ void test_order_by() {
     assert(ast != NULL);
     assert(ast->query.order_by != NULL);
     assert_node_type(ast->query.order_by, NODE_TYPE_ORDER_BY);
-    assert(strcmp(ast->query.order_by->identifier, "height") == 0);
+    assert(strcmp(ast->query.order_by->order_by.column, "height") == 0);
+    assert(ast->query.order_by->order_by.descending == true);
     
     releaseNode(ast);
     printf("✓ test_order_by passed\n\n");
@@ -255,6 +257,24 @@ void test_only_select() {
     printf("✓ test_only_select passed\n\n");
 }
 
+/* test 13: GROUP BY with multiple columns */
+void test_group_by_multiple() {
+    printf("Running test_group_by_multiple...\n");
+    
+    const char* sql = "SELECT role, age WHERE age > 25 GROUP BY role, age";
+    ASTNode* ast = parse(sql);
+    
+    assert(ast != NULL);
+    assert(ast->query.group_by != NULL);
+    assert_node_type(ast->query.group_by, NODE_TYPE_GROUP_BY);
+    assert(ast->query.group_by->group_by.column_count == 2);
+    assert(strcmp(ast->query.group_by->group_by.columns[0], "role") == 0);
+    assert(strcmp(ast->query.group_by->group_by.columns[1], "age") == 0);
+    
+    releaseNode(ast);
+    printf("✓ test_group_by_multiple passed\n\n");
+}
+
 int main(void) {
     printf("=== Parser/AST Test Suite ===\n\n");
     
@@ -265,6 +285,7 @@ int main(void) {
     test_where_with_in();
     test_select_with_function();
     test_group_by();
+    test_group_by_multiple();
     test_order_by();
     test_only_select();
     test_comparison_operators();

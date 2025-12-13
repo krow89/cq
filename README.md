@@ -346,6 +346,15 @@ SELECT CASE WHEN age < 30 THEN 'young' ELSE 'old' END AS category,
 FROM users.csv
 GROUP BY category
 
+-- GROUP BY with multiple columns (including aliases)
+SELECT role,
+       CASE WHEN age < 30 THEN 'junior' ELSE 'senior' END AS level,
+       COUNT(*) AS total,
+       AVG(age) AS avg_age
+FROM users.csv
+GROUP BY role, level
+ORDER BY total DESC
+
 -- ORDER BY with CASE alias
 SELECT name,
        CASE WHEN LENGTH(name) > 5 THEN 'long' ELSE 'short' END AS name_len
