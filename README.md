@@ -21,6 +21,27 @@ cq -q "SELECT * FROM data.csv WHERE role = 'admin'" -o output.csv
 
 # Count matching rows
 cq -q "SELECT * FROM data.csv WHERE age > 30" -c
+
+# Run query from file
+cq -f assets/example_between.sql -p
+
+# Read query from stdin
+cat query.sql | cq -q - -p
+```
+
+## Example SQL Files
+
+The `assets/` directory contains ready-to-run SQL examples:
+
+- **[example_between.sql](assets/example_between.sql)** - BETWEEN operator with SQL comments
+- **[example_aggregation.sql](assets/example_aggregation.sql)** - Complex aggregations with GROUP BY and HAVING
+- **[example_dml.sql](assets/example_dml.sql)** - INSERT, UPDATE, DELETE operations
+- **[example_functions.sql](assets/example_functions.sql)** - String and math functions
+- **[example_joins.sql](assets/example_joins.sql)** - JOIN operations between CSV files
+
+Run any example:
+```bash
+cq -f assets/example_between.sql -p
 ```
 
 ## Data Manipulation (INSERT, UPDATE, DELETE)
@@ -863,8 +884,6 @@ make address_sanitizer
 - [ ] CASE expressions
 - [ ] Index support for large files
 - [ ] Query optimization
-- [ ] BETWEEN
-- [ ] SQL Comments
 
 ## 🔗 Additional Resources
 
