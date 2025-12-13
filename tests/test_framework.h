@@ -62,6 +62,14 @@ static int tests_failed = 0;
         } \
     } while(0)
 
+#define ASSERT_NULL(ptr) \
+    do { \
+        if ((ptr) != NULL) { \
+            TEST_FAIL("Expected NULL pointer"); \
+            return; \
+        } \
+    } while(0)
+
 // print test summary
 static void print_test_summary(void) {
     printf("\n");

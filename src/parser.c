@@ -143,6 +143,11 @@ void releaseNode(ASTNode* node) {
             }
             releaseNode(node->create_table.query);
             break;
+        case NODE_TYPE_ALTER_TABLE:
+            free(node->alter_table.table);
+            free(node->alter_table.old_column_name);
+            free(node->alter_table.new_column_name);
+            break;
         case NODE_TYPE_ASSIGNMENT:
             free(node->assignment.column);
             releaseNode(node->assignment.value);
@@ -1192,7 +1197,7 @@ static void parse_limit_offset(Parser* parser, int* limit, int* offset) {
  * Handles SELECT, FROM, JOINs, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT/OFFSET
  */
 static ASTNode* parse_query_internal(Parser* parser) {
-    // Check for INSERT, UPDATE, DELETE, CREATE first
+    // Check for INSERT, UPDATE, DELETE, CREATE, ALTER first
     Token* first = parser_current_token(parser);
     if (first->type == TOKEN_TYPE_KEYWORD) {
         if (strcasecmp(first->value, "INSERT") == 0) {
@@ -1203,6 +1208,8 @@ static ASTNode* parse_query_internal(Parser* parser) {
             return parse_delete(parser);
         } else if (strcasecmp(first->value, "CREATE") == 0) {
             return parse_create_table(parser);
+        } else if (strcasecmp(first->value, "ALTER") == 0) {
+            return parse_alter_table(parser);
         }
     }
     
@@ -1477,6 +1484,23 @@ void printAst(ASTNode* node, int depth) {
                 print_indent(depth + 1);
                 printf("AS:\n");
                 printAst(node->create_table.query, depth + 2);
+            }
+            break;
+        case NODE_TYPE_ALTER_TABLE:
+            printf("ALTER TABLE: %s\n", node->alter_table.table);
+            print_indent(depth + 1);
+            switch (node->alter_table.operation) {
+                case ALTER_RENAME_COLUMN:
+                    printf("RENAME COLUMN: %s TO %s\n", 
+                           node->alter_table.old_column_name, 
+                           node->alter_table.new_column_name);
+                    break;
+                case ALTER_ADD_COLUMN:
+                    printf("ADD COLUMN: %s\n", node->alter_table.new_column_name);
+                    break;
+                case ALTER_DROP_COLUMN:
+                    printf("DROP COLUMN: %s\n", node->alter_table.old_column_name);
+                    break;
             }
             break;
         case NODE_TYPE_ASSIGNMENT:
@@ -1851,6 +1875,127 @@ ASTNode* parse_create_table(Parser* parser) {
         node->create_table.is_schema_only = true;
     } else {
         fprintf(stderr, "Error: Expected AS or '(' after table name in CREATE TABLE\n");
+        releaseNode(node);
+        return NULL;
+    }
+    
+    return node;
+}
+/*
+ * parse ALTER TABLE statement
+ * supports:
+ *   ALTER TABLE 'file.csv' RENAME COLUMN old_name TO new_name
+ *   ALTER TABLE 'file.csv' ADD COLUMN new_name
+ *   ALTER TABLE 'file.csv' DROP COLUMN col_name
+ */
+ASTNode* parse_alter_table(Parser* parser) {
+    // ALTER keyword already verified by caller, just advance
+    parser_advance(parser);
+    
+    // TABLE keyword
+    if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "TABLE")) {
+        fprintf(stderr, "Error: Expected TABLE after ALTER\n");
+        return NULL;
+    }
+    
+    // table name (file path)
+    Token* table_token = parser_current_token(parser);
+    if (table_token->type != TOKEN_TYPE_IDENTIFIER && table_token->type != TOKEN_TYPE_LITERAL) {
+        fprintf(stderr, "Error: Expected table name/path after ALTER TABLE\n");
+        return NULL;
+    }
+    
+    ASTNode* node = create_node(NODE_TYPE_ALTER_TABLE);
+    node->alter_table.table = strdup(table_token->value);
+    node->alter_table.old_column_name = NULL;
+    node->alter_table.new_column_name = NULL;
+    parser_advance(parser);
+    
+    // check operation: RENAME, ADD, or DROP
+    Token* op_token = parser_current_token(parser);
+    if (!op_token || op_token->type != TOKEN_TYPE_KEYWORD) {
+        fprintf(stderr, "Error: Expected RENAME, ADD, or DROP after table name\n");
+        releaseNode(node);
+        return NULL;
+    }
+    
+    if (strcasecmp(op_token->value, "RENAME") == 0) {
+        // RENAME COLUMN old_name TO new_name
+        node->alter_table.operation = ALTER_RENAME_COLUMN;
+        parser_advance(parser);
+        
+        if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "COLUMN")) {
+            fprintf(stderr, "Error: Expected COLUMN after RENAME\n");
+            releaseNode(node);
+            return NULL;
+        }
+        
+        Token* old_col = parser_current_token(parser);
+        if (old_col->type != TOKEN_TYPE_IDENTIFIER) {
+            fprintf(stderr, "Error: Expected column name after RENAME COLUMN\n");
+            releaseNode(node);
+            return NULL;
+        }
+        node->alter_table.old_column_name = strdup(old_col->value);
+        parser_advance(parser);
+        
+        if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "TO")) {
+            fprintf(stderr, "Error: Expected TO after old column name\n");
+            releaseNode(node);
+            return NULL;
+        }
+        
+        Token* new_col = parser_current_token(parser);
+        if (new_col->type != TOKEN_TYPE_IDENTIFIER) {
+            fprintf(stderr, "Error: Expected new column name after TO\n");
+            releaseNode(node);
+            return NULL;
+        }
+        node->alter_table.new_column_name = strdup(new_col->value);
+        parser_advance(parser);
+        
+    } else if (strcasecmp(op_token->value, "ADD") == 0) {
+        // ADD COLUMN new_name
+        node->alter_table.operation = ALTER_ADD_COLUMN;
+        parser_advance(parser);
+        
+        if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "COLUMN")) {
+            fprintf(stderr, "Error: Expected COLUMN after ADD\n");
+            releaseNode(node);
+            return NULL;
+        }
+        
+        Token* new_col = parser_current_token(parser);
+        if (new_col->type != TOKEN_TYPE_IDENTIFIER) {
+            fprintf(stderr, "Error: Expected column name after ADD COLUMN\n");
+            releaseNode(node);
+            return NULL;
+        }
+        node->alter_table.new_column_name = strdup(new_col->value);
+        parser_advance(parser);
+        
+    } else if (strcasecmp(op_token->value, "DROP") == 0) {
+        // DROP COLUMN col_name
+        node->alter_table.operation = ALTER_DROP_COLUMN;
+        parser_advance(parser);
+        
+        if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "COLUMN")) {
+            fprintf(stderr, "Error: Expected COLUMN after DROP\n");
+            releaseNode(node);
+            return NULL;
+        }
+        
+        Token* col = parser_current_token(parser);
+        if (col->type != TOKEN_TYPE_IDENTIFIER) {
+            fprintf(stderr, "Error: Expected column name after DROP COLUMN\n");
+            releaseNode(node);
+            return NULL;
+        }
+        node->alter_table.old_column_name = strdup(col->value);
+        parser_advance(parser);
+        
+    } else {
+        fprintf(stderr, "Error: Unsupported ALTER TABLE operation '%s'\n", op_token->value);
         releaseNode(node);
         return NULL;
     }

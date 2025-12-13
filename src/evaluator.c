@@ -26,6 +26,7 @@ static ResultSet* evaluate_insert(ASTNode* insert_node);
 static ResultSet* evaluate_update(ASTNode* update_node);
 static ResultSet* evaluate_delete(ASTNode* delete_node);
 static ResultSet* evaluate_create_table(ASTNode* create_node);
+static ResultSet* evaluate_alter_table(ASTNode* alter_node);
 
 /* pattern matching for LIKE and ILIKE operators
  * supports % (any sequence) and _ (single character)
@@ -2772,7 +2773,7 @@ static ResultSet* evaluate_query_internal(ASTNode* query_ast, Row* outer_row, Cs
 ResultSet* evaluate_query(ASTNode* query_ast) {
     if (!query_ast) return NULL;
     
-    // handle DML statements (INSERT, UPDATE, DELETE, CREATE TABLE)
+    // handle DML statements (INSERT, UPDATE, DELETE, CREATE TABLE, ALTER TABLE)
     if (query_ast->type == NODE_TYPE_INSERT) {
         return evaluate_insert(query_ast);
     } else if (query_ast->type == NODE_TYPE_UPDATE) {
@@ -2781,6 +2782,8 @@ ResultSet* evaluate_query(ASTNode* query_ast) {
         return evaluate_delete(query_ast);
     } else if (query_ast->type == NODE_TYPE_CREATE_TABLE) {
         return evaluate_create_table(query_ast);
+    } else if (query_ast->type == NODE_TYPE_ALTER_TABLE) {
+        return evaluate_alter_table(query_ast);
     }
     
     // handle set operations (UNION, INTERSECT, EXCEPT)
@@ -3247,4 +3250,184 @@ static ResultSet* evaluate_create_table(ASTNode* create_node) {
         fprintf(stderr, "Error: Invalid CREATE TABLE statement\n");
         return NULL;
     }
+}
+/*
+ * evaluate ALTER TABLE statement
+ * supports:
+ *   - RENAME COLUMN: changes column name in header
+ *   - ADD COLUMN: adds new column to end of header (fills with empty values)
+ *   - DROP COLUMN: removes column from header and all data
+ */
+static ResultSet* evaluate_alter_table(ASTNode* alter_node) {
+    const char* filepath = alter_node->alter_table.table;
+    
+    // load the CSV file
+    CsvConfig config = global_csv_config;
+    CsvTable* table = csv_load(filepath, config);
+    if (!table) {
+        fprintf(stderr, "Error: Could not load table '%s'\n", filepath);
+        return NULL;
+    }
+    
+    char message[200];
+    bool modified = false;
+    
+    switch (alter_node->alter_table.operation) {
+        case ALTER_RENAME_COLUMN: {
+            // find old column
+            int col_idx = -1;
+            for (int i = 0; i < table->column_count; i++) {
+                if (strcasecmp(table->columns[i].name, alter_node->alter_table.old_column_name) == 0) {
+                    col_idx = i;
+                    break;
+                }
+            }
+            
+            if (col_idx == -1) {
+                fprintf(stderr, "Error: Column '%s' not found in table\n", 
+                       alter_node->alter_table.old_column_name);
+                csv_free(table);
+                return NULL;
+            }
+            
+            // rename column
+            free(table->columns[col_idx].name);
+            table->columns[col_idx].name = strdup(alter_node->alter_table.new_column_name);
+            
+            snprintf(message, sizeof(message), 
+                    "Renamed column '%s' to '%s' in table '%s'",
+                    alter_node->alter_table.old_column_name,
+                    alter_node->alter_table.new_column_name,
+                    filepath);
+            modified = true;
+            break;
+        }
+        
+        case ALTER_ADD_COLUMN: {
+            // check if column already exists
+            for (int i = 0; i < table->column_count; i++) {
+                if (strcasecmp(table->columns[i].name, alter_node->alter_table.new_column_name) == 0) {
+                    fprintf(stderr, "Error: Column '%s' already exists in table\n", 
+                           alter_node->alter_table.new_column_name);
+                    csv_free(table);
+                    return NULL;
+                }
+            }
+            
+            // add new column to header
+            table->columns = realloc(table->columns, sizeof(Column) * (table->column_count + 1));
+            table->columns[table->column_count].name = strdup(alter_node->alter_table.new_column_name);
+            table->columns[table->column_count].inferred_type = VALUE_TYPE_STRING;
+            table->column_count++;
+            
+            // add empty value to all existing rows
+            for (int i = 0; i < table->row_count; i++) {
+                table->rows[i].values = realloc(table->rows[i].values, 
+                                               sizeof(Value) * table->column_count);
+                table->rows[i].values[table->column_count - 1].type = VALUE_TYPE_STRING;
+                table->rows[i].values[table->column_count - 1].string_value = strdup("");
+                table->rows[i].column_count = table->column_count;
+            }
+            
+            snprintf(message, sizeof(message), 
+                    "Added column '%s' to table '%s'",
+                    alter_node->alter_table.new_column_name,
+                    filepath);
+            modified = true;
+            break;
+        }
+        
+        case ALTER_DROP_COLUMN: {
+            // find column to drop
+            int col_idx = -1;
+            for (int i = 0; i < table->column_count; i++) {
+                if (strcasecmp(table->columns[i].name, alter_node->alter_table.old_column_name) == 0) {
+                    col_idx = i;
+                    break;
+                }
+            }
+            
+            if (col_idx == -1) {
+                fprintf(stderr, "Error: Column '%s' not found in table\n", 
+                       alter_node->alter_table.old_column_name);
+                csv_free(table);
+                return NULL;
+            }
+            
+            if (table->column_count == 1) {
+                fprintf(stderr, "Error: Cannot drop the last column\n");
+                csv_free(table);
+                return NULL;
+            }
+            
+            // remove column from header
+            free(table->columns[col_idx].name);
+            for (int i = col_idx; i < table->column_count - 1; i++) {
+                table->columns[i] = table->columns[i + 1];
+            }
+            table->column_count--;
+            table->columns = realloc(table->columns, sizeof(Column) * table->column_count);
+            
+            // remove column from all rows
+            for (int i = 0; i < table->row_count; i++) {
+                if (table->rows[i].values[col_idx].type == VALUE_TYPE_STRING) {
+                    free(table->rows[i].values[col_idx].string_value);
+                }
+                
+                for (int j = col_idx; j < table->rows[i].column_count - 1; j++) {
+                    table->rows[i].values[j] = table->rows[i].values[j + 1];
+                }
+                
+                table->rows[i].column_count--;
+                table->rows[i].values = realloc(table->rows[i].values, 
+                                               sizeof(Value) * table->rows[i].column_count);
+            }
+            
+            snprintf(message, sizeof(message), 
+                    "Dropped column '%s' from table '%s'",
+                    alter_node->alter_table.old_column_name,
+                    filepath);
+            modified = true;
+            break;
+        }
+        
+        default:
+            fprintf(stderr, "Error: Unknown ALTER TABLE operation\n");
+            csv_free(table);
+            return NULL;
+    }
+    
+    // save modified table back to file
+    if (modified) {
+        if (!csv_save(filepath, table)) {
+            fprintf(stderr, "Error: Could not save modified table '%s'\n", filepath);
+            csv_free(table);
+            return NULL;
+        }
+    }
+    
+    csv_free(table);
+    
+    // return success message
+    ResultSet* result = malloc(sizeof(ResultSet));
+    result->filename = strdup("ALTER TABLE result");
+    result->data = NULL;
+    result->file_size = 0;
+    result->fd = -1;
+    result->column_count = 1;
+    result->columns = malloc(sizeof(Column));
+    result->columns[0].name = strdup("message");
+    result->columns[0].inferred_type = VALUE_TYPE_STRING;
+    result->row_count = 1;
+    result->row_capacity = 1;
+    result->rows = malloc(sizeof(Row));
+    result->rows[0].column_count = 1;
+    result->rows[0].values = malloc(sizeof(Value));
+    result->rows[0].values[0].type = VALUE_TYPE_STRING;
+    result->rows[0].values[0].string_value = strdup(message);
+    result->has_header = true;
+    result->delimiter = ',';
+    result->quote = '"';
+    
+    return result;
 }

@@ -78,6 +78,39 @@ cq -q "CREATE TABLE 'data_no_header.csv' AS (col1, col2, col3)"
 - Empty schema creation useful for defining structure before data insertion
 - Schema mapping (AS (col1, col2)) creates empty file with specified column names
 
+## ALTER TABLE (Modify CSV Headers)
+
+**Modify the structure of existing CSV files:**
+
+```bash
+# ALTER TABLE - Rename a column
+cq -q "ALTER TABLE 'users.csv' RENAME COLUMN old_name TO new_name"
+
+# ALTER TABLE - Add a new column (filled with empty values)
+cq -q "ALTER TABLE 'users.csv' ADD COLUMN email"
+
+# ALTER TABLE - Drop a column (removes all data in that column)
+cq -q "ALTER TABLE 'users.csv' DROP COLUMN middle_name"
+
+# Multiple operations can be chained by running commands sequentially
+cq -q "ALTER TABLE 'data.csv' RENAME COLUMN id TO user_id"
+cq -q "ALTER TABLE 'data.csv' ADD COLUMN created_at"
+cq -q "ALTER TABLE 'data.csv' DROP COLUMN deprecated_field"
+```
+
+**Supported Operations:**
+- **RENAME COLUMN**: Changes the column name in the header
+- **ADD COLUMN**: Adds a new column at the end (existing rows get empty values)
+- **DROP COLUMN**: Removes a column and all its data (cannot drop the last column)
+
+**Notes:**
+- All operations modify the CSV file in place
+- Column name matching is case-insensitive
+- Cannot drop the last remaining column
+- Cannot add a column that already exists
+- ADD COLUMN fills existing rows with empty values
+- Original file is overwritten (make backups if needed)
+
 ## Installation
 
 ### Prerequisites
@@ -158,7 +191,7 @@ make CC=aarch64-linux-gnu-gcc
 | Category | Keywords |
 |----------|----------|
 | **Query Structure** | `SELECT`, `DISTINCT`, `FROM`, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT`, `OFFSET` |
-| **Data Definition** | `CREATE`, `TABLE`, `AS` |
+| **Data Definition** | `CREATE`, `ALTER`, `TABLE`, `AS`, `RENAME`, `COLUMN`, `ADD`, `DROP`, `TO` |
 | **Data Manipulation** | `INSERT`, `INTO`, `VALUES`, `UPDATE`, `SET`, `DELETE` |
 | **Joins** | `JOIN`, `INNER JOIN`, `LEFT JOIN`, `RIGHT JOIN`, `FULL JOIN`, `ON` |
 | **Set Operations** | `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT` |
@@ -614,6 +647,7 @@ make test
 ### Test Suite
 ```
 tests/
+├── test_alter_table.c          # ALTER TABLE operations (8 tests)
 ├── test_arithmetic.c           # Arithmetic expressions (22 tests)
 ├── test_create_table.c         # CREATE TABLE operations (8 tests)
 ├── test_csv.c                  # CSV loading and parsing
@@ -796,6 +830,7 @@ make address_sanitizer
 - All join types (INNER, LEFT, RIGHT, FULL)
 - Data manipulation (INSERT, UPDATE, DELETE)
 - CREATE TABLE (save query results, define schema)
+- ALTER TABLE (rename/add/drop columns)
 
 ### Planned Features
 - [ ] More aggregate functions (STDDEV, MEDIAN)
