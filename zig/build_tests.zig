@@ -23,17 +23,16 @@ pub fn buildTests(b: *std.Build, libStep: *std.Build.Step.Compile, target: std.B
         });
         module.addIncludePath(b.path("./../include"));
 
-        const exe = b.addExecutable(.{ .name = std.fs.path.basename(b.path(cf).getPath(b)), .root_module = module });
+        const exe = b.addExecutable(.{ .name = std.fs.path.stem(b.path(cf).getPath(b)), .root_module = module });
+        exe.addCSourceFile(.{ .file = b.path(cf), .flags = &.{} });
         for (headers.items) |headerFp| {
             module.addIncludePath(b.path(headerFp));
-            exe.addCSourceFile(.{
-                .file = b.path(cf),
-                .flags = &.{},
-            });
-            exe.root_module.linkLibrary(libStep);
-            const art = b.addInstallArtifact(exe, .{});
-            art.dest_dir = .{ .custom = "tests" };
-            b.getInstallStep().dependOn(&art.step);
+            //
         }
+        exe.root_module.linkLibrary(libStep);
+        const art = b.addInstallArtifact(exe, .{});
+        const customInstall = try std.fmt.allocPrint(gpa, "tests-{s}{s}", .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag) });
+        art.dest_dir = .{ .custom = customInstall };
+        b.getInstallStep().dependOn(&art.step);
     }
 }

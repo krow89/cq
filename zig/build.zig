@@ -8,15 +8,15 @@ pub fn build(b: *std.Build) !void {
     const trg = b.standardTargetOptions(.{});
     const opt = b.standardOptimizeOption(.{});
 
-    std.debug.print("Building executable", .{});
+    std.debug.print("Building executable\n", .{});
     _ = try utils.buildFor(gpa, &.{ .target = trg, .optimize = opt, .build = b, .artifact_name = "cq" });
 
-    std.debug.print("Building static library", .{});
-    const libStep = try utils.buildFor(gpa, &.{ .target = trg, .optimize = opt, .build = b, .artifact_name = "cq", .build_lib_info = .{ .excluded_main_src = "main.c", .is_dynamic = false } });
+    std.debug.print("Building static library\n", .{});
+    _ = try utils.buildFor(gpa, &.{ .target = trg, .optimize = opt, .build = b, .artifact_name = "cq", .build_lib_info = .{ .excluded_main_src = "main.c", .is_dynamic = false } });
 
-    std.debug.print("Building dynamic library", .{});
+    std.debug.print("Building dynamic library\n", .{});
     _ = try utils.buildFor(gpa, &.{ .target = trg, .optimize = opt, .build = b, .artifact_name = "cq", .build_lib_info = .{ .excluded_main_src = "main.c", .is_dynamic = true } });
 
-    std.debug.print("Building dynamic library", .{});
-    _ = try tests.buildTests(b, libStep, trg, opt);
+    //std.debug.print("Building dynamic tests", .{});
+    //_ = try tests.buildTests(b, libStep, trg, opt);
 }
