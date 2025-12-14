@@ -37,8 +37,10 @@ jobs:
         working-directory: ./zig
         run: zig build -Dtarget=${{matrix.target}} --release=small --summary all
 
-      # - name: Tests
-      #   run: zig run zig/run_tests.zig
+      # Run tests (only with x86_64-linux target for match ubuntu gh runner )
+      - name: Test the build artifact
+        if: ${{matrix.target == 'x86_64-linux'}}
+        run: zig run zig/run_tests.zig -- x86_64-linux
 
       # Create the .zip release containing the executable and upload as artifact
       - name: Create zip release for bin ${{matrix.target}}
@@ -67,7 +69,8 @@ jobs:
         with:
           name: libcq_${{matrix.target}}
           path: releases/libcq_${{matrix.target}}-${{github.ref_name}}.zip
-  
+
+
   release:
     name: Publish
     runs-on: ubuntu-latest

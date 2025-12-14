@@ -8,6 +8,9 @@ pub fn main() !u8 {
     const target = args[1];
     var exeFiles = try std.ArrayList([]const u8).initCapacity(gpa, 0);
     defer exeFiles.deinit(gpa);
+    //const cwdPath = try std.fs.cwd().realpathAlloc(gpa, ".");
+    //defer gpa.free(cwdPath);
+    //std.debug.print("{s}", .{cwdPath});
     try utils.filterFilesInDir(gpa, try std.fmt.allocPrint(gpa, "./zig/zig-out/tests-{s}", .{target}), &exeFiles, null);
     var retCode: u8 = 0;
     for (exeFiles.items) |cf| {

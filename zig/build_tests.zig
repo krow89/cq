@@ -31,7 +31,7 @@ pub fn buildTests(b: *std.Build, libStep: *std.Build.Step.Compile, target: std.B
         }
         exe.root_module.linkLibrary(libStep);
         const art = b.addInstallArtifact(exe, .{});
-        const customInstall = try std.fmt.allocPrint(gpa, "tests-{s}{s}", .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag) });
+        const customInstall = try std.fmt.allocPrint(gpa, "tests-{s}-{s}", .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag) });
         art.dest_dir = .{ .custom = customInstall };
         b.getInstallStep().dependOn(&art.step);
     }

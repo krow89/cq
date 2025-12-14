@@ -12,11 +12,16 @@ pub fn build(b: *std.Build) !void {
     _ = try utils.buildFor(gpa, &.{ .target = trg, .optimize = opt, .build = b, .artifact_name = "cq" });
 
     std.debug.print("Building static library\n", .{});
-    _ = try utils.buildFor(gpa, &.{ .target = trg, .optimize = opt, .build = b, .artifact_name = "cq", .build_lib_info = .{ .excluded_main_src = "main.c", .is_dynamic = false } });
+    const libStep = try utils.buildFor(gpa, &.{ .target = trg, .optimize = opt, .build = b, .artifact_name = "cq", .build_lib_info = .{ .excluded_main_src = "main.c", .is_dynamic = false } });
 
     std.debug.print("Building dynamic library\n", .{});
     _ = try utils.buildFor(gpa, &.{ .target = trg, .optimize = opt, .build = b, .artifact_name = "cq", .build_lib_info = .{ .excluded_main_src = "main.c", .is_dynamic = true } });
 
-    //std.debug.print("Building dynamic tests", .{});
-    //_ = try tests.buildTests(b, libStep, trg, opt);
+    // We want build the test only on linux x86_64 (github action with linux ubuntu runner)
+    if (trg.result.os.tag == .linux and trg.result.cpu.arch == .x86_64) {
+        std.debug.print("Building tests \n", .{});
+        _ = try tests.buildTests(b, libStep, trg, opt);
+    } else {
+        std.debug.print("Skip uilding tests (only in x86_64-linux target is avaible)", .{});
+    }
 }
