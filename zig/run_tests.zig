@@ -13,14 +13,24 @@ pub fn main() !u8 {
     //std.debug.print("{s}", .{cwdPath});
     try utils.filterFilesInDir(gpa, try std.fmt.allocPrint(gpa, "./zig/zig-out/tests-{s}", .{target}), &exeFiles, null);
     var retCode: u8 = 0;
+    var failTests = try std.ArrayList([]const u8).initCapacity(gpa, 0);
+    defer failTests.deinit(gpa);
     for (exeFiles.items) |cf| {
         var child = std.process.Child.init(&[_][]const u8{cf}, gpa);
         try child.spawn();
         const term = try child.wait();
         if (term.Exited != 0) {
             retCode = 1;
+            try failTests.append(gpa, cf);
         }
-        std.debug.print("{s} = exit {}", .{ cf, term.Exited });
+        std.debug.print("{s} = exit {}\n", .{ cf, term.Exited });
     }
+    if (failTests.items.len != 0) {
+        std.debug.print("Following tests file are failed\n", .{});
+        for (failTests.items) |it| {
+            std.debug.print("{s}\n", .{it});
+        }
+    }
+    std.debug.print("Return code: {}\n", .{retCode});
     return retCode;
 }
