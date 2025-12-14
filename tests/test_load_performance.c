@@ -16,6 +16,18 @@ int main(void) {
     printf("=== CSV Load Performance Test ===\n\n");
     
     const char* filename = "data/bigdata.csv";
+
+    FILE* f = fopen(filename, "r");
+    if (!f) {
+        printf(
+            "=== CSV Load Performance Test ===\n\n"
+            "SKIPPED: file '%s' does not exist\n",
+            filename
+        );
+        return 0; // test skipped, success
+    }
+    fclose(f);
+
     CsvConfig config = {
         .delimiter = ',',
         .quote = '"',

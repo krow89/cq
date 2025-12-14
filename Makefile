@@ -9,12 +9,13 @@ INCLUDE_DIR := include
 BUILD_DIR := build
 TEST_DIR := tests
 
-SRCS = $(wildcard $(SRC_DIR)/*.c)
+SRCS = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/evaluator/*.c) $(wildcard $(SRC_DIR)/parser/*.c)
 # Add external sources for Windows
 ifeq ($(OS),Windows_NT)
     SRCS += $(wildcard $(SRC_DIR)/external/*.c)
 endif
-OBJS = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+# convert all source paths to object paths
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 EXEC = $(BUILD_DIR)/cq
 
 # Library objects (everything except main.c)
@@ -42,20 +43,35 @@ $(EXEC): $(OBJS) | $(BUILD_DIR)
 	$(CC) $(OBJS) -o $@ $(LDFLAGS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@ $(LDFLAGS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Rule for parser sources
+$(OBJ_DIR)/parser/%.o: $(SRC_DIR)/parser/%.c | $(OBJ_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Rule for evaluator sources
+$(OBJ_DIR)/evaluator/%.o: $(SRC_DIR)/evaluator/%.c | $(OBJ_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # Rule for external sources (Windows mmap implementation)
 $(OBJ_DIR)/external/%.o: $(SRC_DIR)/external/%.c | $(OBJ_DIR)
 ifeq ($(OS),Windows_NT)
 	@if not exist $(OBJ_DIR)\\external mkdir $(OBJ_DIR)\\external
 endif
-	$(CC) $(CFLAGS) -c $< -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJ_DIR):
 ifeq ($(OS),Windows_NT)
 	@if not exist $(OBJ_DIR) mkdir $(OBJ_DIR)
+	@if not exist $(OBJ_DIR)\\parser mkdir $(OBJ_DIR)\\parser
+	@if not exist $(OBJ_DIR)\\evaluator mkdir $(OBJ_DIR)\\evaluator
 else
 	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(OBJ_DIR)/parser
+	@mkdir -p $(OBJ_DIR)/evaluator
 endif
 
 $(BUILD_DIR):
