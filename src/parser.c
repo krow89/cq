@@ -7,9 +7,6 @@
 #include <ctype.h>
 #include "parser.h"
 #include "tokenizer.h"
-
-/* global flag to allow DELETE without WHERE clause */
-bool force_delete = false;
 #include "string_utils.h"
 #include "parser/parser_core.h"
 #include "parser/ast_nodes.h"
@@ -17,6 +14,9 @@ bool force_delete = false;
 #include "parser/parser_clauses.h"
 #include "parser/parser_statements.h"
 #include "parser/parser_internal.h"
+
+/* global flag to allow DELETE/UPDATE without WHERE clause */
+bool force_delete = false;
 
 // forward declarations for functions defined in submodules
 ASTNode* parse_select(Parser* parser);
