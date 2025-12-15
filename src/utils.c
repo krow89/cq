@@ -97,7 +97,7 @@ char* skipWhitespaces(char* str) {
 void print_help(const char* program_name) {
     printf("Usage: %s [OPTIONS]\n", program_name);
     printf("\nOptions:\n");
-    printf("  -h           Show this help message\n");
+    printf("  -h, --help   Show this help message\n");
     printf("  -q <query>   SQL query to execute (use '-' to read from stdin)\n");
     printf("  -f <file>    Read SQL query from file\n");
     printf("  -o <file>    Write result as CSV to output file\n");
@@ -106,6 +106,7 @@ void print_help(const char* program_name) {
     printf("  -v           Print result in vertical format (one column per line)\n");
     printf("  -s <char>    Field separator for input CSV (default: ',')\n");
     printf("  -d <char>    Output delimiter for -o option (default: ',')\n");
+    printf("  -F, --force  Allow DELETE without WHERE clause (dangerous!)\n");
     printf("\nExamples:\n");
     printf("  %s -q \"SELECT name, age WHERE age > 30\" -p\n", program_name);
     printf("  %s -f query.sql -p\n", program_name);

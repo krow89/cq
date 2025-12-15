@@ -229,10 +229,11 @@ ASTNode* parse_delete(Parser* parser) {
     node->delete_stmt.where = NULL;
     parser_advance(parser);
     
-    // WHERE, required for safety, we don't allow DELETE without WHERE
+    // WHERE, required for safety unless --force flag is set
     node->delete_stmt.where = parse_where(parser);
-    if (!node->delete_stmt.where) {
+    if (!node->delete_stmt.where && !force_delete) {
         fprintf(stderr, "Error: WHERE clause is required for DELETE (safety measure)\n");
+        fprintf(stderr, "       Use --force flag to allow DELETE without WHERE\n");
         releaseNode(node);
         return NULL;
     }

@@ -21,9 +21,17 @@ int main(int argc, char* argv[]) {
     char input_separator = ',';
     char output_delimiter = ',';
     
+    // long options for --force
+    static struct option long_options[] = {
+        {"force", no_argument, 0, 'F'},
+        {"help", no_argument, 0, 'h'},
+        {0, 0, 0, 0}
+    };
+    
     // parse args
     int opt;
-    while ((opt = getopt(argc, argv, "hq:f:o:cps:d:v")) != -1) {
+    int option_index = 0;
+    while ((opt = getopt_long(argc, argv, "hq:f:o:cps:d:vF", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 print_help(argv[0]);
@@ -52,6 +60,9 @@ int main(int argc, char* argv[]) {
             case 'v':
                 vertical_output = true;
                 print_table = true;  // implicit
+                break;
+            case 'F':
+                force_delete = true;
                 break;
             default:
                 print_help(argv[0]);
