@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include "tokenizer.h"
 
+/* global flag to allow DELETE without WHERE clause */
+extern bool force_delete;
+
 
 typedef enum {
     NODE_TYPE_QUERY,
