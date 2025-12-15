@@ -9,9 +9,8 @@ A lightweight, fast SQL query processor written in C that enables executing SQL 
 ## Quick Start
 
 ```bash
-# Install (no Make required)
-./install.sh   # Unix-like
-install.bat    # Windows
+# Install (make required)
+make
 
 # Run a query
 ./build/cq -q "SELECT name, age FROM data.csv WHERE age > 25" -p
@@ -159,17 +158,7 @@ cq -q "ALTER TABLE 'data.csv' DROP COLUMN deprecated_field"
 
 ### Build Commands
 
-**Quick Install (no Make required):**
-```bash
-# Unix-like (Linux, macOS, BSD)
-./install.sh
-
-# Windows (MSVC)
-install.bat
-```
-
-**Using Make:**
-
+**Quick Install (Make required):**
 **Unix-like (Linux, macOS):**
 ```bash
 # Build the main executable
@@ -184,31 +173,18 @@ make clean
 
 **Windows (MSVC):**
 ```cmd
-# Build using the provided batch script
-install.bat
-
-# Or manually with MSVC
-cl.exe /W3 /O2 /Iinclude src\*.c /Febuild\cq.exe
+cl /W4 /O2 /Iinclude src\*.c /Fe:build\cq.exe
 ```
 
 **Windows (MinGW/Git Bash):**
 ```bash
 # Use standard Unix Makefile or install script
 make
-# or
-./install.sh
 ```
 
 **Raspberry Pi (ARM64):**
 ```bash
-# Native build on Raspberry Pi
-./install.sh
-# or
 make
-
-# Cross-compile from x86_64 Linux
-sudo apt-get install gcc-aarch64-linux-gnu
-make CC=aarch64-linux-gnu-gcc
 ```
 
 ## Features

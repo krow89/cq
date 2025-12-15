@@ -3,7 +3,7 @@ import sys, random
 outf = "data/bigdata.csv"
 
 if len(sys.argv) < 2 or not sys.argv[1].isnumeric() and int(sys.argv[1]) <= 0:
-    print("Errore: You have to pass a valid positive number of lines") 
+    print("Error: You have to pass a valid positive number of lines") 
 
 lines= int( sys.argv[1] )
 cols = ['name', 'surname', 'age', 'gender', 'height']
